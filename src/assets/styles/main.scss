@@ -1,0 +1,172 @@
+@use './variables.scss' as *;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// 清晰明亮的主色调
+:root {
+  --primary-color: #4A90E2;
+  --secondary-color: #F5F7FA;
+  --accent-color: #67C23A;
+  --text-color: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+  --text-placeholder: #C0C4CC;
+  --border-base: #DCDFE6;
+  --border-light: #E4E7ED;
+  --border-lighter: #EBEEF5;
+  --border-extra-light: #F2F6FC;
+  --background-color: #FFFFFF;
+  --background-page: #F2F3F5;
+  --success: #67C23A;
+  --warning: #E6A23C;
+  --danger: #F56C6C;
+  --info: #909399;
+}
+
+// 覆盖Element Plus主题色
+.el-button--primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  
+  &:hover, &:focus {
+    filter: brightness(1.1);
+  }
+}
+
+// 页面布局
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--background-page);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+// 卡片样式
+.card-container {
+  background-color: var(--background-color);
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+// 聊天界面样式
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--background-color);
+  
+  .chat-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+    background-color: var(--background-color);
+    
+    .title {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+  }
+  
+  .chat-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    
+    .message-item {
+      margin-bottom: 20px;
+      display: flex;
+      
+      &.user {
+        justify-content: flex-end;
+        
+        .message-content {
+          background-color: var(--primary-color);
+          color: white;
+          border-radius: 18px 18px 4px 18px;
+        }
+      }
+      
+      &.ai {
+        justify-content: flex-start;
+        
+        .message-content {
+          background-color: var(--secondary-color);
+          color: var(--text-color);
+          border-radius: 18px 18px 18px 4px;
+        }
+      }
+      
+      .message-content {
+        max-width: 70%;
+        padding: 12px 16px;
+        line-height: 1.5;
+        word-wrap: break-word;
+      }
+    }
+  }
+  
+  .chat-input {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-light);
+    background-color: var(--background-color);
+  }
+}
+
+// 风险评估卡片
+.risk-card {
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  
+  &.low {
+    background-color: rgba(103, 194, 58, 0.1);
+    border: 1px solid rgba(103, 194, 58, 0.3);
+  }
+  
+  &.medium {
+    background-color: rgba(230, 162, 60, 0.1);
+    border: 1px solid rgba(230, 162, 60, 0.3);
+  }
+  
+  &.high {
+    background-color: rgba(245, 108, 108, 0.1);
+    border: 1px solid rgba(245, 108, 108, 0.3);
+  }
+  
+  &.critical {
+    background-color: rgba(245, 108, 108, 0.2);
+    border: 1px solid rgba(245, 108, 108, 0.5);
+  }
+  
+  .risk-level {
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+  
+  .risk-score {
+    margin-bottom: 8px;
+  }
+  
+  .risk-description {
+    line-height: 1.5;
+  }
+}
