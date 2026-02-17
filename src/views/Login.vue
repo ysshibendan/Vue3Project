@@ -183,7 +183,6 @@ const handleLogin = async () => {
   try {
     await authStore.login(loginForm)
     console.log('登录成功，准备跳转')
-    alert('登录成功')
      // 使用nextTick确保状态更新后再跳转
      await router.push('/')
     console.log('跳转完成')

@@ -1,4 +1,13 @@
+// 用户相关API
 import request from '@/utils/request'
+
+// 获取用户信息
+export function getUserInfo() {
+  return request({
+    url: '/api/userinfo',
+    method: 'get'
+  })
+}
 
 // 更新用户信息
 export function updateUserInfo(data) {
@@ -19,64 +28,44 @@ export function getUserList(params) {
 }
 
 // 获取指定用户信息
-export function getAnyUserInfo(userId, params) {
+export function getAnyUserInfo(userId) {
   return request({
     url: `/api/userinfo/${userId}`,
-    method: 'get',
-    params
+    method: 'get'
   })
 }
 
 // 更新用户状态
-export function updateUserStatus(userId, data) {
+export function updateUserStatus(userId, status) {
   return request({
     url: `/api/userinfo/${userId}/status`,
     method: 'patch',
+    data: { status }
+  })
+}
+
+// 添加用户
+export function addUser(data) {
+  return request({
+    url: '/api/userbase/register',
+    method: 'post',
     data
   })
 }
 
-// 获取咨询师信息
-export function getCounselorInfo(params) {
+// 更新用户
+export function updateUser(data) {
   return request({
-    url: '/api/counselor',
-    method: 'get',
-    params
-  })
-}
-
-// 更新咨询师信息
-export function updateCounselorInfo(data) {
-  return request({
-    url: '/api/counselor',
+    url: '/api/userinfo',
     method: 'put',
     data
   })
 }
 
-// 获取咨询师列表
-export function getCounselorList(params) {
+// 删除用户
+export function deleteUser(userId) {
   return request({
-    url: '/api/counselor/list',
-    method: 'get',
-    params
-  })
-}
-
-// 更新咨询师状态
-export function updateCounselorStatus(counselorId, data) {
-  return request({
-    url: `/api/counselor/${counselorId}/status`,
-    method: 'patch',
-    data
-  })
-}
-
-// 设置咨询师可用时间
-export function setAvailable(data) {
-  return request({
-    url: '/api/counselor/available',
-    method: 'post',
-    data
+    url: `/api/userinfo/${userId}`,
+    method: 'delete'
   })
 }

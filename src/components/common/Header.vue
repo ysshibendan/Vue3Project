@@ -48,9 +48,23 @@
           cancelButtonText: '取消',
           type: 'warning'
         }).then(() => {
-          authStore.logout()
-          router.push('/login')
-          ElMessage.success('已退出登录')
+          // 调用退出登录API
+          fetch('/api/logout', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${authStore.token}`
+            }
+          }).then(() => {
+            // 无论API是否成功，都清除本地状态
+            authStore.logout()
+            router.push('/login')
+            ElMessage.success('已退出登录')
+          }).catch(() => {
+            // 即使API失败，也清除本地状态
+            authStore.logout()
+            router.push('/login')
+            ElMessage.success('已退出登录')
+          })
         }).catch(() => {
           // 用户取消操作
         })
@@ -109,4 +123,3 @@
     }
   }
   </style>
-  

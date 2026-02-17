@@ -11,16 +11,41 @@ const service = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   config => {
-   
-    const authStore = useAuthStore()
-    if (authStore.token) {
-      config.headers['Authorization'] = `Bearer ${authStore.token}`
+    // 首先尝试从localStorage获取token
+    const token = localStorage.getItem('vue3project_token')
+    
+    // 如果localStorage中有token，作为query参数传递
+    if (token) {
+      // 如果是GET请求，将token作为query参数
+      if (config.method === 'get' || config.method === 'GET') {
+        if (!config.params) {
+          config.params = {}
+        }
+        config.params.token = token
+
+      } else {
+        // 如果是POST/PUT/DELETE等请求，将token作为query参数
+        if (!config.params) {
+          config.params = {}
+        }
+        config.params.token = token
+
+      }
+    } else {
+      // 如果localStorage中没有token，尝试从store获取
+      const authStore = useAuthStore()
+      if (authStore.token) {
+        if (!config.params) {
+          config.params = {}
+        }
+        config.params.token = authStore.token
+
+      } else {
+
+      }
     }
       
-    console.log('请求URL:', config.url)
-    console.log('请求方法:', config.method)
-    console.log('请求数据:', config.data)
-    console.log('请求头:', config.headers)
+
     return config
   },
   error => {
@@ -32,14 +57,12 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    console.log('响应状态:', response.status)
-    console.log('响应数据:', response.data)
+
      // 直接返回响应数据，不做额外处理
      return response.data
   },
   error => {
     console.error('响应错误', error)
-    console.error('错误详情:', error.response)
     
     if (error.code === 'NETWORK_ERROR') {
       ElMessage.error('网络连接失败，请检查网络或服务器状态')

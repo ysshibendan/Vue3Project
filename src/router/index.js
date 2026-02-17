@@ -26,6 +26,31 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/Profile.vue')
+  },
+  {
+    path: '/usercenter',
+    name: 'UserCenter',
+    component: () => import('@/views/usercenter/Dashboard.vue')
+  },
+  {
+    path: '/usercenter/users',
+    name: 'UserManagement',
+    component: () => import('@/views/usercenter/UserManagement.vue')
+  },
+  {
+    path: '/usercenter/students',
+    name: 'StudentManagement',
+    component: () => import('@/views/usercenter/StudentManagement.vue')
+  },
+  {
+    path: '/usercenter/counselors',
+    name: 'CounselorManagement',
+    component: () => import('@/views/usercenter/CounselorManagement.vue')
+  },
+  {
+    path: '/usercenter/appointments',
+    name: 'AppointmentManagement',
+    component: () => import('@/views/usercenter/AppointmentManagement.vue')
   }
 ]
 

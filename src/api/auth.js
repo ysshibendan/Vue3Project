@@ -10,9 +10,13 @@ export function login(data) {
  
 // 获取用户信息
 export function getUserInfo() {
+  const token = localStorage.getItem('vue3project_token')
   return request({
     url: '/api/userinfo',
-    method: 'get'
+    method: 'get',
+    params: {
+      token: token
+    }
   })
 }
  
