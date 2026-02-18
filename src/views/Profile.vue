@@ -26,7 +26,7 @@
                 class="profile-form"
               >
                 <el-form-item label="学号" prop="student_id">
-                  <el-input v-model="studentForm.student_id" disabled />
+                  <el-input v-model="studentForm.student_id" />
                 </el-form-item>
                 
                 <el-form-item label="学校" prop="school">
@@ -82,8 +82,8 @@
                 
                 <el-form-item label="状态" prop="status">
                   <el-radio-group v-model="counselorForm.status">
-                    <el-radio :label="1">可用</el-radio>
-                    <el-radio :label="0">不可用</el-radio>
+                    <el-radio :value="1">可用</el-radio>
+                    <el-radio :value="0">不可用</el-radio>
                   </el-radio-group>
                 </el-form-item>
                 
@@ -121,9 +121,9 @@
                 </el-form-item>
                 
                 <el-form-item label="性别" prop="gender">
-                  <el-radio-group v-model="adminForm.gender">
-                    <el-radio label="male">男</el-radio>
-                    <el-radio label="female">女</el-radio>
+                  <el-radio-group v-model="studentForm.gender">
+                    <el-radio value="male">男</el-radio>
+                    <el-radio value="female">女</el-radio>
                   </el-radio-group>
                 </el-form-item>
                 
@@ -191,6 +191,104 @@
               </el-form>
             </div>
             
+          </div>
+          
+          <!-- 独立容器：咨询师预约时间设置 -->
+          <div v-if="userInfo && userInfo.role === 1" class="appointment-settings-container">
+            <div class="appointment-settings card-container">
+              <h2>预约时间设置</h2>
+              
+              <!-- 预约时间设置布局 -->
+              <div class="appointment-layout" style="display: flex !important; flex-direction: row !important; align-items: flex-start !important; gap: 40px !important;">
+                <!-- 一周时间段展示 -->
+                <div class="week-schedule" style="width: 1360px; flex-shrink: 0;">
+                  <h3>预约时间段表</h3>
+                  <div class="schedule-table" style="width: 1360px !important; height: 640px !important; border-collapse: separate; border: 2px solid var(--border-color); border-radius: 8px; overflow: visible; display: block !important;">
+                    <table style="width: 1360px !important; height: 640px !important; border-collapse: separate; display: table !important; table-layout: fixed !important; border-spacing: 0;">
+                      <thead style="display: table-header-group !important;">
+                        <tr style="display: table-row !important;">
+                          <th style="width: 150px !important; height: 80px !important; background-color: #f5f5f5; color: #333; font-size: 16px; font-weight: 600; text-align: center; vertical-align: middle; border: 1px solid #ddd; display: table-cell !important;"></th>
+                          <th v-for="(day, index) in weekDays" :key="index" style="width: 150px !important; height: 80px !important; background-color: #70ba96; color: white !important; font-weight: bold !important; font-size: 20px !important; text-align: center !important; vertical-align: middle !important; border: 1px solid #ddd; display: table-cell !important; padding: 10px !important;">{{ day.name }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(time, timeIndex) in timeAxisLabels" :key="timeIndex">
+                          <td style="width: 150px !important; height: 80px !important; background-color: #f5f5f5; color: #333; font-size: 21px; font-weight: 600; text-align: center; vertical-align: middle;">{{ time }}</td>
+                          <td 
+                            v-for="(day, dayIndex) in weekDays" 
+                            :key="`${timeIndex}-${dayIndex}`" 
+                            class="slot-cell"
+                            @click="toggleTimeSlot(day.dayOfWeek, time, getNextTime(timeIndex))"
+                            :class="{ 'selected': isTimeSlotSelected(day.dayOfWeek, time, getNextTime(timeIndex)) }"
+                            :style="getSlotStyle(day, time, getNextTime(timeIndex))"
+                          >
+                            <div v-if="hasSlot(day, time, getNextTime(timeIndex))" class="slot-indicator">
+                              {{ getSlotInfo(day, time, getNextTime(timeIndex)) }}
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                
+                <!-- 预约时间选择 -->
+                <div class="appointment-selection" style="flex-shrink: 0 !important; width: 350px !important; margin-top: 40px;">
+                  <div class="selection-header">
+                    <h3>选择预约时间</h3>
+                  </div>
+                  <div class="selection-content" style="display: flex !important; flex-direction: column !important; gap: 25px !important;">
+                    <div class="form-item">
+                      <label>选择星期：</label>
+                      <el-select v-model="selectedDay" placeholder="请选择星期" @change="onDayChange" style="width: 100% !important;">
+                        <el-option 
+                          v-for="day in weekDays" 
+                          :key="day.dayOfWeek" 
+                          :label="day.name" 
+                          :value="day.dayOfWeek"
+                        />
+                      </el-select>
+                    </div>
+                    <div class="form-item">
+                      <label>开始时间：</label>
+                      <el-select v-model="selectedStartTime" placeholder="请选择开始时间" style="width: 100% !important;">
+                        <el-option 
+                          v-for="time in timeOptions" 
+                          :key="time.value" 
+                          :label="time.label" 
+                          :value="time.value"
+                        />
+                      </el-select>
+                    </div>
+                    <div class="form-item">
+                      <label>结束时间：</label>
+                      <el-select v-model="selectedEndTime" placeholder="请选择结束时间" style="width: 100% !important;">
+                        <el-option 
+                          v-for="time in timeOptions" 
+                          :key="time.value" 
+                          :label="time.label" 
+                          :value="time.value"
+                        />
+                      </el-select>
+                    </div>
+                    <div class="form-item">
+                      <label>最大预约数：</label>
+                      <el-input-number v-model="maxAppointments" :min="1" :max="20" style="width: 100% !important;" />
+                    </div>
+                    <div class="form-actions" style="display: flex !important; gap: 15px !important; margin-top: 20px !important;">
+                      <el-button type="primary" @click="saveAppointmentSettings" :loading="saving" style="flex: 1;">
+                        保存设置
+                      </el-button>
+                      <el-button @click="resetAppointmentSettings" style="flex: 1;">重置</el-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 独立容器：心理健康统计 -->
+          <!-- <div class="mental-health-container">
             <div class="mental-health-stats card-container">
               <h2>心理健康统计</h2>
               <div class="stats-grid">
@@ -222,9 +320,10 @@
                 </div>
               </div>
             </div>
+          </div> -->
+            
           </div>
         </div>
-      </div>
     </div>
   </template>
   
@@ -265,13 +364,19 @@ if (!requireAuth()) {
   const studentForm = reactive({
     id: '',
     user_id: '',
-    student_id: '',
+    student_id: '', // 确保是字符串类型
     school: '',
     major: '',
     grade: '',
     emergency_contact: '',
     emergency_phone: '',
-    psychological_status: '正常'
+    psychological_status: '正常',
+    // user_info部分
+    real_name: '',
+    gender: '',
+    age: 18,
+    avatar: '',
+    status: 1
   })
   
   const counselorForm = reactive({
@@ -292,6 +397,42 @@ if (!requireAuth()) {
     gender: '',
     age: 18
   })
+  
+  // 预约时间设置相关数据
+  const weekDays = ref([
+    { name: '周一', dayOfWeek: 1, slots: [] },
+    { name: '周二', dayOfWeek: 2, slots: [] },
+    { name: '周三', dayOfWeek: 3, slots: [] },
+    { name: '周四', dayOfWeek: 4, slots: [] },
+    { name: '周五', dayOfWeek: 5, slots: [] },
+    { name: '周六', dayOfWeek: 6, slots: [] },
+    { name: '周日', dayOfWeek: 0, slots: [] }
+  ])
+  
+  const selectedDay = ref('')
+  const selectedStartTime = ref('')
+  const selectedEndTime = ref('')
+  const maxAppointments = ref(5)
+  const saving = ref(false)
+  
+  const timeOptions = [
+    { label: '09:00', value: '09:00' },
+    { label: '10:00', value: '10:00' },
+    { label: '11:00', value: '11:00' },
+    { label: '12:00', value: '12:00' },
+    { label: '13:00', value: '13:00' },
+    { label: '14:00', value: '14:00' },
+    { label: '15:00', value: '15:00' },
+    { label: '16:00', value: '16:00' },
+    { label: '17:00', value: '17:00' },
+    { label: '18:00', value: '18:00' },
+    { label: '19:00', value: '19:00' },
+    { label: '20:00', value: '20:00' },
+    { label: '21:00', value: '21:00' }
+  ]
+  
+  // 时间轴标签（从早上7点到晚上21点，每两小时一个标签）
+  const timeAxisLabels = ref(['07:00', '09:00', '11:00', '13:00', '15:00', '17:00', '19:00', '21:00'])
   
   const passwordForm = reactive({
     currentPassword: '',
@@ -409,18 +550,26 @@ if (!requireAuth()) {
 
       
       if (data && data.code === 200 && data.data) {
+        // 设置用户信息
+        if (data.data.userInfo) {
+          studentForm.real_name = data.data.userInfo.realName || ''
+          studentForm.gender = data.data.userInfo.gender || ''
+          studentForm.age = data.data.userInfo.age || 18
+          studentForm.avatar = data.data.userInfo.avatar || ''
+          studentForm.status = data.data.userInfo.status || 1
+        }
+        
         // 设置学生信息
         if (data.data.studentInfo) {
           studentForm.id = data.data.studentInfo.id
           studentForm.user_id = data.data.studentInfo.userId
-          studentForm.student_id = data.data.studentInfo.studentId || ''
+          studentForm.student_id = data.data.studentInfo.studentId ? data.data.studentInfo.studentId.toString() : ''
           studentForm.school = data.data.studentInfo.school || ''
           studentForm.major = data.data.studentInfo.major || ''
           studentForm.grade = data.data.studentInfo.grade || ''
           studentForm.emergency_contact = data.data.studentInfo.emergencyContact || ''
           studentForm.emergency_phone = data.data.studentInfo.emergencyPhone || ''
           studentForm.psychological_status = data.data.studentInfo.psychologicalStatus || '良好'
-
         }
         
         // 更新store中的用户信息
@@ -590,13 +739,22 @@ if (!requireAuth()) {
               token: token
             },
             data: {
-              studentId: studentForm.student_id,
-              school: studentForm.school,
-              major: studentForm.major,
-              grade: studentForm.grade,
-              emergencyContact: studentForm.emergency_contact,
-              emergencyPhone: studentForm.emergency_phone,
-              psychologicalStatus: studentForm.psychological_status
+              user_info: {
+                real_name: studentForm.real_name,
+                gender: studentForm.gender,
+                age: studentForm.age,
+                avatar: studentForm.avatar,
+                status: studentForm.status
+              },
+              student_info: {
+                student_id: parseInt(studentForm.student_id),
+                school: studentForm.school,
+                major: studentForm.major,
+                grade: studentForm.grade,
+                emergency_contact: studentForm.emergency_contact,
+                emergency_phone: studentForm.emergency_phone,
+                psychological_status: studentForm.psychological_status
+              }
             }
           })
           
@@ -653,6 +811,57 @@ if (!requireAuth()) {
         }
       }
     })
+  }
+  
+  // 获取咨询师预约时间设置
+  const fetchCounselorSchedule = async () => {
+    try {
+      // 直接从localStorage获取token
+      const token = localStorage.getItem('vue3project_token')
+      
+      // 调试信息
+      console.log('获取咨询师预约时间，token:', token)
+      console.log('获取咨询师预约时间，counselorForm:', counselorForm)
+      console.log('获取咨询师预约时间，counselorForm.userId:', counselorForm.userId)
+      
+      // 调用获取咨询师预约时间设置的API
+      const data = await request({
+        url: '/api/appointment/available',
+        method: 'GET',
+        params: {
+          token: token,
+          counselor_id: counselorForm.user_id
+        }
+      })
+      
+      console.log('获取咨询师预约时间响应:', data)
+      
+      if (data && data.code === 200 && data.data) {
+        // 重置weekDays数据
+        weekDays.value = weekDays.value.map(day => ({
+          ...day,
+          slots: []
+        }))
+        
+        // 更新weekDays数据
+        data.data.forEach(item => {
+          const dayIndex = weekDays.value.findIndex(day => day.dayOfWeek === item.dayOfWeek)
+          if (dayIndex !== -1) {
+            weekDays.value[dayIndex].slots.push({
+              start_time: item.startTime,
+              end_time: item.endTime,
+              max_appointments: item.maxAppointments,
+              booked_count: item.bookedCount,
+              is_available: item.isAvailable
+            })
+          }
+        })
+        
+        console.log('更新后的weekDays:', weekDays.value)
+      }
+    } catch (error) {
+      ElMessage.error(error.message || '获取预约时间设置失败')
+    }
   }
   
   // 获取管理员资料
@@ -768,6 +977,224 @@ if (!requireAuth()) {
     })
   }
   
+  // 判断时间段是否被选中
+  const isSelected = (dayOfWeek, startTime, endTime) => {
+    return selectedDay.value === dayOfWeek && 
+           selectedStartTime.value === startTime && 
+           selectedEndTime.value === endTime
+  }
+  
+  // 获取下一个时间点（用于确定时间段）
+  const getNextTime = (index) => {
+    if (index < timeAxisLabels.value.length - 1) {
+      return timeAxisLabels.value[index + 1]
+    }
+    return '23:00' // 最后一个时间段的结束时间
+  }
+  
+  // 判断表格单元格是否被选中
+  const isTimeSlotSelected = (dayOfWeek, startTime, endTime) => {
+    // 检查是否有已保存的时间段包含这个时间段
+    const day = weekDays.value.find(d => d.dayOfWeek === dayOfWeek)
+    if (day && day.slots) {
+      return day.slots.some(slot => 
+        slot.start_time === startTime && slot.end_time === endTime
+      )
+    }
+    return false
+  }
+  
+  // 判断时间段是否有预约
+  const hasSlot = (day, time, nextTime) => {
+    const dayData = weekDays.value.find(d => d.dayOfWeek === day.dayOfWeek)
+    if (!dayData || !dayData.slots) return false
+    
+    return dayData.slots.some(slot => {
+      // 检查当前时间段是否在预约时间段内
+      return time >= slot.start_time && time < slot.end_time
+    })
+  }
+  
+  // 获取时间段样式
+  const getSlotStyle = (day, time, nextTime) => {
+    const baseStyle = {
+      width: '150px !important',
+      height: '80px !important',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      fontSize: '16px',
+      textAlign: 'center',
+      verticalAlign: 'middle',
+      position: 'relative',
+      padding: '0'
+    }
+    
+    const dayData = weekDays.value.find(d => d.dayOfWeek === day.dayOfWeek)
+    if (!dayData || !dayData.slots) {
+      return {
+        ...baseStyle,
+        backgroundColor: '#fff'
+      }
+    }
+    
+    // 检查当前时间段是否在预约时间段内
+    const hasAppointment = dayData.slots.some(slot => {
+      return time >= slot.start_time && time < slot.end_time
+    })
+    
+    if (hasAppointment) {
+      return {
+        ...baseStyle,
+        backgroundColor: '#70ba96', // 主题绿色
+        color: 'white'
+      }
+    }
+    
+    return {
+      ...baseStyle,
+      backgroundColor: '#fff'
+    }
+  }
+  
+  // 获取时间段信息
+  const getSlotInfo = (day, time, nextTime) => {
+    const dayData = weekDays.value.find(d => d.dayOfWeek === day.dayOfWeek)
+    if (!dayData || !dayData.slots) return ''
+    
+    const slot = dayData.slots.find(s => {
+      return time >= s.start_time && time < s.end_time
+    })
+    
+    if (!slot) return ''
+    
+    // 如果是时间段的开始，显示开始时间和结束时间
+    if (time === slot.start_time) {
+      return `${slot.start_time}-${slot.end_time}\n(${slot.max_appointments - slot.booked_count}/${slot.max_appointments})`
+    }
+    
+    // 如果不是时间段的开始，只显示一个指示器
+    return '●'
+  }
+  
+  // 切换时间段选择
+  const toggleTimeSlot = (dayOfWeek, startTime, endTime) => {
+    if (isSelected(dayOfWeek, startTime, endTime)) {
+      // 取消选择
+      selectedDay.value = ''
+      selectedStartTime.value = ''
+      selectedEndTime.value = ''
+    } else {
+      // 选择时间段
+      selectedDay.value = dayOfWeek
+      selectedStartTime.value = startTime
+      selectedEndTime.value = endTime
+    }
+  }
+  
+  // 生成网格单元格
+  const generateGridCells = () => {
+    const cells = []
+    
+    // 左上角空白单元格
+    cells.push({
+      class: 'corner-cell',
+      content: '',
+      style: 'grid-column: 1; grid-row: 1;',
+      clickHandler: null
+    })
+    
+    // 第一行：周几标题
+    weekDays.value.forEach((day, index) => {
+      cells.push({
+        class: 'day-header-cell',
+        content: day.name,
+        style: `grid-column: ${index + 2}; grid-row: 1;`,
+        clickHandler: null
+      })
+    })
+    
+    // 其他行：时间段和单元格
+    timeAxisLabels.value.forEach((time, timeIndex) => {
+      // 时间标签
+      cells.push({
+        class: 'time-label-cell',
+        content: time,
+        style: `grid-column: 1; grid-row: ${timeIndex + 2};`,
+        clickHandler: null
+      })
+      
+      // 每天的单元格
+      weekDays.value.forEach((day, dayIndex) => {
+        const endTime = getNextTime(timeIndex)
+        cells.push({
+          class: `time-slot-cell ${isTimeSlotSelected(day.dayOfWeek, time, endTime) ? 'selected' : ''}`,
+          content: '',
+          style: `grid-column: ${dayIndex + 2}; grid-row: ${timeIndex + 2};`,
+          clickHandler: () => toggleTimeSlot(day.dayOfWeek, time, endTime)
+        })
+      })
+    })
+    
+    return cells
+  }
+  
+  // 日期改变时的处理
+  const onDayChange = () => {
+    // 重置时间选择
+    selectedStartTime.value = ''
+    selectedEndTime.value = ''
+  }
+  
+  // 保存预约时间设置
+  const saveAppointmentSettings = async () => {
+    if (!selectedDay.value || !selectedStartTime.value || !selectedEndTime.value) {
+      ElMessage.warning('请选择完整的预约时间设置')
+      return
+    }
+    
+    saving.value = true
+    try {
+      // 直接从localStorage获取token
+      const token = localStorage.getItem('vue3project_token')
+      
+      // 调用保存预约时间设置的API
+      const data = await request({
+        url: '/api/appointment/available',
+        method: 'POST',
+        params: {
+          token: token
+        },
+        data: {
+          counselor_id: counselorForm.id,
+          day_of_week: selectedDay.value,
+          start_time: selectedStartTime.value,
+          end_time: selectedEndTime.value,
+          max_appointments: maxAppointments.value
+        }
+      })
+      
+      if (data && data.code === 200) {
+        ElMessage.success('预约时间设置保存成功')
+        await fetchCounselorSchedule() // 重新获取数据
+        resetAppointmentSettings() // 重置表单
+      } else {
+        throw new Error(data.message || '保存失败')
+      }
+    } catch (error) {
+      ElMessage.error(error.message || '保存预约时间设置失败')
+    } finally {
+      saving.value = false
+    }
+  }
+  
+  // 重置预约时间设置表单
+  const resetAppointmentSettings = () => {
+    selectedDay.value = ''
+    selectedStartTime.value = ''
+    selectedEndTime.value = ''
+    maxAppointments.value = 5
+  }
+  
   // 重置表单
   const resetForm = () => {
     if (userInfo.value && userInfo.value.role === 0) {
@@ -807,6 +1234,7 @@ if (!requireAuth()) {
         await fetchStudentProfile()
       } else if (userInfo.value && userInfo.value.role === 1) {
         await fetchCounselorProfile()
+        await fetchCounselorSchedule()
       } else if (userInfo.value && userInfo.value.role === 2) {
         await fetchAdminProfile()
       }
@@ -910,16 +1338,213 @@ if (!requireAuth()) {
         }
         
         .chart-placeholder {
-          height: 300px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background-color: var(--secondary-color);
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--secondary-color);
+        border-radius: 8px;
+      }
+    }
+  }
+  
+  // 独立容器样式
+    .appointment-settings-container {
+      margin-top: 20px;
+      
+      .appointment-settings {
+        h2 {
+          margin-bottom: 20px;
+        }
+      }
+    }
+    
+    // 预约时间布局样式
+    .appointment-layout {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 40px;
+      
+      .week-schedule {
+        flex-shrink: 0;
+        
+        h3 {
+          font-size: 20px;
+          color: var(--text-color);
+          margin-bottom: 20px;
+        }
+        
+        .schedule-table {
+          width: 800px;
+          height: 640px;
+          border-collapse: collapse;
+          border: 1px solid var(--border-color);
           border-radius: 8px;
+          overflow: hidden;
+          
+          table {
+            width: 100%;
+            height: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          
+          th, td {
+            border: 1px solid var(--border-color);
+            padding: 0;
+            text-align: center;
+            width: 150px;
+            height: 80px;
+          }
+          
+          th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+          }
+          
+          th:first-child,
+          td:first-child {
+            background-color: var(--secondary-color);
+            color: var(--text-secondary);
+            font-size: 14px;
+            width: 150px;
+            font-weight: 600;
+          }
+          
+          .slot-cell {
+            background-color: var(--background-color);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            width: 150px;
+            height: 80px;
+          }
+          
+          .slot-cell:hover {
+            background-color: rgba(var(--primary-color), 0.1);
+          }
+          
+          .slot-cell.selected {
+          background-color: var(--primary-color);
+          color: white;
+          box-shadow: 0 2px 8px rgba(var(--primary-color), 0.3);
+        }
+        
+        .slot-indicator {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          height: 100%;
+          font-size: 12px;
+          font-weight: bold;
+          white-space: pre-line;
+        }
+        }
+      }
+      
+      .appointment-selection {
+        flex-shrink: 0;
+        width: 350px;
+        margin-top: 40px;
+        
+        .selection-header {
+          margin-bottom: 30px;
+          
+          h3 {
+            font-size: 20px;
+            color: var(--text-color);
+          }
+        }
+        
+        .selection-content {
+          display: flex;
+          flex-direction: column;
+          gap: 25px;
+          
+          .form-item {
+            
+            label {
+              display: block;
+              margin-bottom: 10px;
+              font-weight: 500;
+              color: var(--text-color);
+              font-size: 16px;
+            }
+            
+            .el-select,
+            .el-input-number {
+              width: 100%;
+            }
+          }
+          
+          .form-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            
+            .el-button {
+              flex: 1;
+            }
+          }
+        }
+      }
+    }
+    
+    // 心理健康统计容器样式
+    .mental-health-container {
+      margin-top: 20px;
+      
+      .mental-health-stats {
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 20px;
+          margin-bottom: 30px;
+          
+          .stat-item {
+            text-align: center;
+            padding: 20px;
+            background-color: var(--secondary-color);
+            border-radius: 8px;
+            
+            .stat-value {
+              font-size: 24px;
+              font-weight: 600;
+              color: var(--primary-color);
+              margin-bottom: 8px;
+            }
+            
+            .stat-label {
+              font-size: 14px;
+              color: var(--text-secondary);
+            }
+          }
+        }
+        
+        .chart-container {
+          h3 {
+            font-size: 18px;
+            color: var(--text-color);
+            margin-bottom: 15px;
+          }
+          
+          .chart-placeholder {
+            height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--secondary-color);
+            border-radius: 8px;
+          }
         }
       }
     }
   }
+  
   
   @media (max-width: 1200px) {
     .profile-content {
