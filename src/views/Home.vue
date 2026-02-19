@@ -207,6 +207,52 @@
     </div>
   </section>
 
+      <!-- 靠谱的心理咨询师 -->
+      <section class="xiaoguo-section counselor-section">
+        <div class="container">
+          <div class="page-title">
+            <h2>靠谱的心理咨询师</h2>
+            <p>平台严选师资，客服点对点沟通、一对一推荐</p>
+          </div>
+          
+          <!-- 咨询师列表 -->
+          <div class="counselor-list">
+            <div 
+              v-for="(counselor, index) in counselorList" 
+              :key="index" 
+              class="counselor-card"
+              @mouseenter="handleCardHover(index, true)"
+              @mouseleave="handleCardHover(index, false)"
+            >
+              <!-- 咨询师头像 -->
+              <div class="counselor-avatar">
+                <img 
+                  :src="getCounselorAvatar(counselor.userInfo.avatar)" 
+                  :alt="counselor.userInfo.realName"
+                />
+              </div>
+              
+              <!-- 咨询师信息 -->
+              <div class="counselor-info" :class="{ 'hovered': counselor.hovered }">
+                <!-- 基本信息行 -->
+                <div class="counselor-basic">
+                  <span>{{ counselor.userInfo.realName || '' }}老师</span>
+                  <span class="divider" v-if="counselor.userInfo.realName && counselor.counselorInfo.workExperience">|</span>
+                  <span>{{ counselor.counselorInfo.workExperience ? counselor.counselorInfo.workExperience + '年经验老师' : '' }}</span>
+                </div>
+                
+                <!-- 咨询师详细信息 -->
+                <div class="counselor-detail">
+                  <p class="specialty-title">擅长领域：</p>
+                  <p class="specialty">{{ counselor.counselorInfo.specialty || '' }}</p>
+                  <p class="introduction">{{ counselor.counselorInfo.introduction || '' }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 功能介绍 -->
       <section id="features" class="features">
         <div class="container">
@@ -340,6 +386,7 @@ const isAuthenticated = computed(() => authStore.isAuthenticated)
 const currentIndex = ref(0) // 当前起始索引 (0-7)
 const itemsToShow = 7 // 每次显示7个项目
 const totalPages = 8 // 总页数
+const counselorList = ref([]) // 咨询师列表数据
 // 轮播图数据
 const carouselImages = [carousel1, carousel2, carousel3]
 const currentImageIndex = ref(0)
@@ -469,7 +516,115 @@ const handleSymptomClick = (title) => {
 // 组件挂载时开始自动轮播
 onMounted(() => {
   startAutoPlay()
+  fetchCounselorList()
 })
+
+// 获取咨询师列表
+const fetchCounselorList = async () => {
+  try {
+    // 从localStorage获取token
+    const token = localStorage.getItem('vue3project_token')
+    
+    // 构建请求参数
+    const params = new URLSearchParams({
+      token: token || '',
+      status: '-1',
+      is_available: '1',
+      page: '1',
+      page_size: '50',
+      keyspecialty: ''
+    })
+    
+    const response = await fetch(`/api/counselor/list?${params}`)
+    const data = await response.json()
+    
+    if (data.code === 200 && data.data) {
+      // 获取前三个咨询师，如果不足三个则用空数据填充
+      const counselors = data.data.slice(0, 3)
+      const counselorCount = counselors.length
+      
+      // 如果不足三个，用空数据填充
+      for (let i = counselorCount; i < 3; i++) {
+        counselors.push({
+          userInfo: {
+            id: '',
+            username: '',
+            email: '',
+            phone: '',
+            role: 1,
+            realName: '',
+            gender: '',
+            age: 0,
+            avatar: '',
+            status: 0,
+            lastLoginAt: '',
+            createdAt: '',
+            updatedAt: ''
+          },
+          counselorInfo: {
+            id: '',
+            userId: '',
+            specialty: '',
+            introduction: '',
+            workExperience: 0,
+            createdAt: '',
+            updatedAt: ''
+          },
+          hovered: false
+        })
+      }
+      
+      counselorList.value = counselors
+    } else {
+      // 如果请求失败，创建三个空数据
+      counselorList.value = Array(3).fill(null).map(() => ({
+        userInfo: {
+          id: '',
+          username: '',
+          email: '',
+          phone: '',
+          role: 1,
+          realName: '',
+          gender: '',
+          age: 0,
+          avatar: '',
+          status: 0,
+          lastLoginAt: '',
+          createdAt: '',
+          updatedAt: ''
+        },
+        counselorInfo: {
+          id: '',
+          userId: '',
+          specialty: '',
+          introduction: '',
+          workExperience: 0,
+          createdAt: '',
+          updatedAt: ''
+        },
+        hovered: false
+      }))
+    }
+  } catch (error) {
+    console.error('获取咨询师列表失败:', error)
+  }
+}
+
+// 处理卡片悬浮事件
+const handleCardHover = (index, isHovered) => {
+  if (counselorList.value[index]) {
+    counselorList.value[index].hovered = isHovered
+  }
+}
+
+// 获取咨询师头像
+const getCounselorAvatar = (avatar) => {
+  if (!avatar || avatar.trim() === '') {
+    // 使用默认头像
+    return '/images/head.webp'
+  }
+  return avatar
+}
 
 // 组件卸载时清除自动轮播
 onUnmounted(() => {
@@ -993,6 +1148,144 @@ main {
   padding: 60px 0;
   background-color: #d4edd4;
 }
+
+.counselor-section {
+  background-color: white;
+}
+
+/* 咨询师列表样式 */
+.counselor-list {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-top: 40px;
+}
+
+/* 咨询师卡片样式 */
+.counselor-card {
+  position: relative;
+  width: 370px;
+  height: 370px;
+  border-radius: 10px;
+  border: 10px solid white;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.counselor-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* 咨询师头像样式 */
+.counselor-avatar {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.counselor-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 咨询师信息样式 */
+.counselor-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.9);
+  height: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  transition: all 0.3s ease;
+  color: #333;
+  z-index: 2;
+  overflow: hidden;
+  padding-left: 10px;
+}
+
+.counselor-info.hovered {
+  height: 125px;
+  transform: translateY(-50px);
+  background-color: rgba(255, 255, 255, 0.95);
+}
+
+/* 咨询师基本信息 */
+.counselor-basic {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  text-align: left;
+  padding-left: 10px;
+}
+
+.counselor-basic span:first-child {
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.counselor-basic span:last-child {
+  font-size: 14px;
+}
+
+.counselor-basic .divider {
+  margin: 0 8px;
+  color: #999;
+}
+
+/* 咨询师详细信息 */
+.counselor-detail {
+  width: 100%;
+  padding: 15px;
+  text-align: left;
+  font-size: 14px;
+  color: #666;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  padding-left: 10px;
+}
+
+.counselor-info.hovered .counselor-detail {
+  opacity: 1;
+  max-height: 100px;
+}
+
+.counselor-detail .specialty-title {
+  font-weight: bold;
+  color: #ff8c00;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.counselor-detail .specialty,
+.counselor-detail .introduction {
+  font-size: 14px;
+  color: #666;
+  margin: 5px 0;
+  line-height: 1.4;
+}
+
+.counselor-detail p {
+  margin: 5px 0;
+  line-height: 1.4;
+}
+
+.counselor-detail .specialty {
+  font-size: 14px;
+  color: #333;
+}
+
+/* 移除重复的样式规则，使用统一样式 */
 
 .page-title {
   text-align: center;

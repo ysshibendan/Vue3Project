@@ -201,29 +201,38 @@
               <!-- 预约时间设置布局 -->
               <div class="appointment-layout" style="display: flex !important; flex-direction: row !important; align-items: flex-start !important; gap: 40px !important;">
                 <!-- 一周时间段展示 -->
-                <div class="week-schedule" style="width: 1360px; flex-shrink: 0;">
+                <div class="week-schedule" style="width: 1260px; flex-shrink: 0;">
                   <h3>预约时间段表</h3>
-                  <div class="schedule-table" style="width: 1360px !important; height: 640px !important; border-collapse: separate; border: 2px solid var(--border-color); border-radius: 8px; overflow: visible; display: block !important;">
-                    <table style="width: 1360px !important; height: 640px !important; border-collapse: separate; display: table !important; table-layout: fixed !important; border-spacing: 0;">
+                  <div class="schedule-table" style="width: 1100px !important; height: 720px !important; border-collapse: separate; border: 2px solid var(--border-color); border-radius: 8px; overflow: visible; display: block !important;">
+                    <table style="width: 1100px !important; height: 720px !important; border-collapse: separate; display: table !important; table-layout: fixed !important; border-spacing: 0;">
                       <thead style="display: table-header-group !important;">
                         <tr style="display: table-row !important;">
-                          <th style="width: 150px !important; height: 80px !important; background-color: #f5f5f5; color: #333; font-size: 16px; font-weight: 600; text-align: center; vertical-align: middle; border: 1px solid #ddd; display: table-cell !important;"></th>
-                          <th v-for="(day, index) in weekDays" :key="index" style="width: 150px !important; height: 80px !important; background-color: #70ba96; color: white !important; font-weight: bold !important; font-size: 20px !important; text-align: center !important; vertical-align: middle !important; border: 1px solid #ddd; display: table-cell !important; padding: 10px !important;">{{ day.name }}</th>
+                          <th style="width: 120px !important; height: 45px !important; background-color: #f5f5f5; color: #333; font-size: 14px; font-weight: 600; text-align: center; vertical-align: middle; border: 1px solid #ddd; display: table-cell !important;"></th>
+                          <th v-for="(day, index) in weekDays" :key="index" style="width: 120px !important; height: 45px !important; background-color: #f5f5f5 !important; color: #333 !important; font-weight: bold !important; font-size: 16px !important; text-align: center !important; vertical-align: middle !important; border: 1px solid #ddd; display: table-cell !important; padding: 5px !important;">{{ day.name }}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr v-for="(time, timeIndex) in timeAxisLabels" :key="timeIndex">
-                          <td style="width: 150px !important; height: 80px !important; background-color: #f5f5f5; color: #333; font-size: 21px; font-weight: 600; text-align: center; vertical-align: middle;">{{ time }}</td>
+                        <tr v-for="(time, timeIndex) in timeSlots" :key="timeIndex">
+                          <td :style="`width: 120px !important; height: 45px !important; background-color: #f5f5f5; color: #333; font-size: 14px; font-weight: 600; text-align: center; position: relative; vertical-align: middle;`">
+                            <span v-if="timeIndex % 2 === 0" style="font-size: 20px; font-weight: bold;">
+                              {{ Math.floor(timeIndex / 2) + 1 }}
+                            </span>
+                            <div v-else style="position: absolute; top: 5px; left: 0; right: 0; font-size: 14px; display: flex; flex-direction: column; align-items: center; padding: 0;">
+                              <span>{{ timeAxisLabels[Math.floor(timeIndex / 2)].split('-')[0] }}</span>
+                              <span>{{ timeAxisLabels[Math.floor(timeIndex / 2)].split('-')[1] }}</span>
+                            </div>
+                          </td>
                           <td 
                             v-for="(day, dayIndex) in weekDays" 
                             :key="`${timeIndex}-${dayIndex}`" 
                             class="slot-cell"
                             @click="toggleTimeSlot(day.dayOfWeek, time, getNextTime(timeIndex))"
+                            @dblclick="handleDoubleClick(day.dayOfWeek, time, getNextTime(timeIndex))"
                             :class="{ 'selected': isTimeSlotSelected(day.dayOfWeek, time, getNextTime(timeIndex)) }"
-                            :style="getSlotStyle(day, time, getNextTime(timeIndex))"
+                            :style="getSlotStyle(day, time, getNextTime(timeIndex), timeIndex)"
                           >
-                            <div v-if="hasSlot(day, time, getNextTime(timeIndex))" class="slot-indicator">
-                              {{ getSlotInfo(day, time, getNextTime(timeIndex)) }}
+                            <div v-if="hasSlot(day, time, getNextTime(timeIndex))" class="slot-indicator" style="font-size: 20px !important; font-weight: bold !important; color: white !important; text-shadow: 1px 1px 2px rgba(0,0,0,0.5) !important;">
+                              {{ getSlotInfo(day, time, getNextTime(timeIndex), timeIndex) }}
                             </div>
                           </td>
                         </tr>
@@ -276,7 +285,10 @@
                       <el-input-number v-model="maxAppointments" :min="1" :max="20" style="width: 100% !important;" />
                     </div>
                     <div class="form-actions" style="display: flex !important; gap: 15px !important; margin-top: 20px !important;">
-                      <el-button type="primary" @click="saveAppointmentSettings" :loading="saving" style="flex: 1;">
+                      <el-button type="primary" @click="addAppointmentTime" :loading="saving" style="flex: 1;">
+                        添加预约时间
+                      </el-button>
+                      <el-button type="success" @click="saveAppointmentSettings" :loading="saving" style="flex: 1;">
                         保存设置
                       </el-button>
                       <el-button @click="resetAppointmentSettings" style="flex: 1;">重置</el-button>
@@ -329,7 +341,7 @@
   
   <script setup>
   import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useAuth } from '@/composables/useAuth'
 import request from '@/utils/request'
@@ -416,6 +428,8 @@ if (!requireAuth()) {
   const saving = ref(false)
   
   const timeOptions = [
+    { label: '07:00', value: '07:00' },
+    { label: '08:00', value: '08:00' },
     { label: '09:00', value: '09:00' },
     { label: '10:00', value: '10:00' },
     { label: '11:00', value: '11:00' },
@@ -428,11 +442,24 @@ if (!requireAuth()) {
     { label: '18:00', value: '18:00' },
     { label: '19:00', value: '19:00' },
     { label: '20:00', value: '20:00' },
-    { label: '21:00', value: '21:00' }
+    { label: '21:00', value: '21:00' },
+    { label: '22:00', value: '22:00' },
+    { label: '23:00', value: '23:00' }
   ]
   
-  // 时间轴标签（从早上7点到晚上21点，每两小时一个标签）
-  const timeAxisLabels = ref(['07:00', '09:00', '11:00', '13:00', '15:00', '17:00', '19:00', '21:00'])
+  // 时间轴标签 - 保持原来的两小时格式用于显示
+  const timeAxisLabels = ref([
+    '07:00-09:00', '09:00-11:00', '11:00-13:00', '13:00-15:00', 
+    '15:00-17:00', '17:00-19:00', '19:00-21:00', '21:00-23:00'
+  ])
+  
+  // 实际时间格子 - 每小时一个格子
+  const timeSlots = ref([
+    '07:00-08:00', '08:00-09:00', '09:00-10:00', '10:00-11:00', 
+    '11:00-12:00', '12:00-13:00', '13:00-14:00', '14:00-15:00',
+    '15:00-16:00', '16:00-17:00', '17:00-18:00', '18:00-19:00',
+    '19:00-20:00', '20:00-21:00', '21:00-22:00', '22:00-23:00'
+  ])
   
   const passwordForm = reactive({
     currentPassword: '',
@@ -986,8 +1013,8 @@ if (!requireAuth()) {
   
   // 获取下一个时间点（用于确定时间段）
   const getNextTime = (index) => {
-    if (index < timeAxisLabels.value.length - 1) {
-      return timeAxisLabels.value[index + 1]
+    if (index < timeSlots.value.length - 1) {
+      return timeSlots.value[index + 1].split('-')[0]
     }
     return '23:00' // 最后一个时间段的结束时间
   }
@@ -1004,25 +1031,71 @@ if (!requireAuth()) {
     return false
   }
   
-  // 判断时间段是否有预约
-  const hasSlot = (day, time, nextTime) => {
-    const dayData = weekDays.value.find(d => d.dayOfWeek === day.dayOfWeek)
-    if (!dayData || !dayData.slots) return false
+  // 处理双击事件 - 用于取消预约时间
+  const handleDoubleClick = (dayOfWeek, time, nextTime) => {
+    const dayData = weekDays.value.find(d => d.dayOfWeek === dayOfWeek)
+    if (!dayData || !dayData.slots || dayData.slots.length === 0) return
     
-    return dayData.slots.some(slot => {
-      // 检查当前时间段是否在预约时间段内
-      return time >= slot.start_time && time < slot.end_time
+    // 从时间格子中提取开始时间
+    const timeStart = time.split('-')[0]
+    
+    // 查找当前格子所属的预约时间段
+    const slot = dayData.slots.find(s => {
+      return timeStart >= s.start_time && timeStart < s.end_time
+    })
+    
+    if (!slot) return
+    
+    // 弹窗确认是否取消
+    ElMessageBox.confirm(
+      `确定要取消 ${slot.start_time}-${slot.end_time} 的预约时间设置吗？`,
+      '取消预约时间',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    ).then(() => {
+      // 从weekDays中移除该时间段
+      const slotIndex = dayData.slots.findIndex(s => 
+        s.start_time === slot.start_time && s.end_time === slot.end_time
+      )
+      
+      if (slotIndex !== -1) {
+        // 使用数组替换来触发响应式更新
+        dayData.slots = dayData.slots.filter((_, index) => index !== slotIndex)
+        ElMessage.success('已取消预约时间设置')
+      }
+    }).catch(() => {
+      // 用户取消操作
     })
   }
   
+  // 判断时间段是否有预约
+const hasSlot = (day, time, nextTime) => {
+  const dayData = weekDays.value.find(d => d.dayOfWeek === day.dayOfWeek)
+  if (!dayData || !dayData.slots) return false
+  
+  return dayData.slots.some(slot => {
+    // 从时间格子中提取开始时间
+    const timeStart = time.split('-')[0]
+    const timeEnd = time.split('-')[1] || nextTime
+    
+    // 检查是否有重叠
+    return (timeStart >= slot.start_time && timeStart < slot.end_time) || 
+           (timeEnd > slot.start_time && timeEnd <= slot.end_time) ||
+           (timeStart <= slot.start_time && timeEnd >= slot.end_time)
+  })
+}
+  
   // 获取时间段样式
-  const getSlotStyle = (day, time, nextTime) => {
+  const getSlotStyle = (day, time, nextTime, timeIndex) => {
     const baseStyle = {
       width: '150px !important',
-      height: '80px !important',
+      height: '45px !important',
       cursor: 'pointer',
       transition: 'all 0.3s',
-      fontSize: '16px',
+      fontSize: '12px',
       textAlign: 'center',
       verticalAlign: 'middle',
       position: 'relative',
@@ -1030,66 +1103,209 @@ if (!requireAuth()) {
     }
     
     const dayData = weekDays.value.find(d => d.dayOfWeek === day.dayOfWeek)
-    if (!dayData || !dayData.slots) {
+    if (!dayData || !dayData.slots || dayData.slots.length === 0) {
       return {
         ...baseStyle,
-        backgroundColor: '#fff'
+        backgroundColor: '#fff !important'
       }
     }
     
     // 检查当前时间段是否在预约时间段内
+    // 调试信息
+    console.log('检查时间段 - day:', day.dayOfWeek, 'time:', time)
+    console.log('dayData.slots:', dayData.slots)
+    
     const hasAppointment = dayData.slots.some(slot => {
-      return time >= slot.start_time && time < slot.end_time
+      // 从时间格子中提取开始时间
+      const timeStart = time.split('-')[0]
+      
+      // 简化逻辑：检查格子的开始时间是否在预约时间段内
+      const result = timeStart >= slot.start_time && timeStart < slot.end_time
+      
+      // 调试信息
+      if (day.dayOfWeek === 1 && (timeStart === '09:00' || timeStart === '07:00')) {
+        console.log('比较 - timeStart:', timeStart)
+        console.log('比较 - slot.start_time:', slot.start_time)
+        console.log('比较 - slot.end_time:', slot.end_time)
+        console.log('比较 - result:', result)
+      }
+      
+      return result
     })
     
+    // 调试信息
+    if (day.dayOfWeek === 1) {
+      console.log('最终结果 - hasAppointment:', hasAppointment)
+    }
+    
     if (hasAppointment) {
+      // 查找当前格子所属的预约时间段
+      const slot = dayData.slots.find(s => {
+        const timeStart = time.split('-')[0]
+        return timeStart >= s.start_time && timeStart < s.end_time
+      })
+      
+      if (!slot) {
+        return {
+          ...baseStyle,
+          backgroundColor: '#70ba96 !important', // 主题绿色
+          color: 'white !important'
+        }
+      }
+      
+      // 获取当前格子的开始时间
+      const timeStart = time.split('-')[0]
+      
+      // 检查是否是时间段的第一个格子
+      const isFirstSlot = timeStart === slot.start_time
+      
+      // 检查是否是时间段的最后一个格子
+      // 计算slot.end_time前一小时的时间
+      const endHour = parseInt(slot.end_time.split(':')[0])
+      const endMinute = slot.end_time.split(':')[1]
+      const lastSlotTime = `${endHour - 1}:${endMinute}`
+      const isLastSlot = timeStart === lastSlotTime
+      
+      // 特殊处理：如果时间段只有一小时，则既是第一个也是最后一个
+      const isOneHourSlot = slot.start_time === slot.end_time
+      if (isOneHourSlot) {
+        isFirstSlot = timeStart === slot.start_time
+        isLastSlot = timeStart === slot.start_time
+      }
+      
+      // 根据位置设置不同的圆角
+      let borderRadius = '0 !important'
+      if (isFirstSlot && isLastSlot) {
+        // 只有一个格子的情况，四个角都有圆角
+        borderRadius = '10px !important'
+      } else if (isFirstSlot) {
+        // 第一个格子，只有上面两个角有圆角
+        borderRadius = '10px 10px 0 0 !important'
+      } else if (isLastSlot) {
+        // 最后一个格子，只有下面两个角有圆角
+        borderRadius = '0 0 10px 10px !important'
+      }
+      
+      // 根据位置设置不同的边框
+      let border = '1px solid #4a8c6f !important' // 默认四边都有边框
+      if (isFirstSlot && isLastSlot) {
+        // 只有一个格子的情况，四边都有边框
+        border = '1px solid #4a8c6f !important'
+      } else if (isFirstSlot) {
+        // 第一个格子，上、左、右边有边框，下边无边框
+        border = '1px solid #4a8c6f !important'
+        // 使用borderWidth来精确控制
+        return {
+          ...baseStyle,
+          backgroundColor: '#70ba96 !important',
+          color: 'white !important',
+          border: '2px solid white !important',
+          borderWidth: '2px 2px 0 2px !important',
+          borderColor: 'white !important',
+          borderStyle: 'solid !important',
+          borderRadius: borderRadius,
+          margin: '0 !important',
+          padding: '2px !important',
+          boxSizing: 'border-box !important'
+        }
+      } else if (isLastSlot) {
+        // 最后一个格子，下、左、右边有边框，上边无边框
+        return {
+          ...baseStyle,
+          backgroundColor: '#70ba96 !important',
+          color: 'white !important',
+          border: '2px solid white !important',
+          borderWidth: '0 2px 2px 2px !important',
+          borderColor: 'white !important',
+          borderStyle: 'solid !important',
+          borderRadius: borderRadius,
+          margin: '0 !important',
+          padding: '2px !important',
+          boxSizing: 'border-box !important'
+        }
+      } else {
+        // 中间格子，只有左、右边有边框
+        return {
+          ...baseStyle,
+          backgroundColor: '#70ba96 !important',
+          color: 'white !important',
+          border: '2px solid white !important',
+          borderWidth: '0 2px 0 2px !important',
+          borderColor: 'white !important',
+          borderStyle: 'solid !important',
+          borderRadius: borderRadius,
+          margin: '0 !important',
+          padding: '2px !important',
+          boxSizing: 'border-box !important'
+        }
+      }
+      
       return {
         ...baseStyle,
-        backgroundColor: '#70ba96', // 主题绿色
-        color: 'white'
+        backgroundColor: '#70ba96 !important', // 主题绿色
+        color: 'white !important',
+        border: '2px solid white !important', // 白色边框
+        borderRadius: borderRadius, // 根据位置设置的圆角
+        margin: '0 !important', // 移除外边距，使格子紧密相连
+        padding: '2px !important', // 内边距
+        boxSizing: 'border-box !important' // 确保边框向内
       }
     }
     
     return {
       ...baseStyle,
-      backgroundColor: '#fff'
+      backgroundColor: '#fff !important'
     }
   }
   
+  // 将时间字符串转换为分钟数
+  const timeToMinutes = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    return hours * 60 + minutes
+  }
+  
   // 获取时间段信息
-  const getSlotInfo = (day, time, nextTime) => {
+  const getSlotInfo = (day, time, nextTime, timeIndex) => {
     const dayData = weekDays.value.find(d => d.dayOfWeek === day.dayOfWeek)
-    if (!dayData || !dayData.slots) return ''
+    if (!dayData || !dayData.slots || dayData.slots.length === 0) return ''
+    
+    // 从时间格子中提取开始时间
+    const timeStart = time.split('-')[0]
     
     const slot = dayData.slots.find(s => {
-      return time >= s.start_time && time < s.end_time
+      // 检查当前格子是否在预约时间段内
+      // 格子代表一个小时，所以检查这个小时是否在预约时间段内
+      return timeStart >= s.start_time && timeStart < s.end_time
     })
     
     if (!slot) return ''
     
     // 如果是时间段的开始，显示开始时间和结束时间
-    if (time === slot.start_time) {
-      return `${slot.start_time}-${slot.end_time}\n(${slot.max_appointments - slot.booked_count}/${slot.max_appointments})`
+    if (timeStart === slot.start_time) {
+      return `${slot.start_time}-${slot.end_time}`
     }
     
-    // 如果不是时间段的开始，只显示一个指示器
-    return '●'
+    // 如果不是时间段的开始，不显示任何内容
+    return ''
   }
   
   // 切换时间段选择
-  const toggleTimeSlot = (dayOfWeek, startTime, endTime) => {
-    if (isSelected(dayOfWeek, startTime, endTime)) {
-      // 取消选择
-      selectedDay.value = ''
-      selectedStartTime.value = ''
-      selectedEndTime.value = ''
-    } else {
-      // 选择时间段
-      selectedDay.value = dayOfWeek
-      selectedStartTime.value = startTime
-      selectedEndTime.value = endTime
-    }
+const toggleTimeSlot = (dayOfWeek, startTime, endTime) => {
+  if (isSelected(dayOfWeek, startTime, endTime)) {
+    // 取消选择
+    selectedDay.value = ''
+    selectedStartTime.value = ''
+    selectedEndTime.value = ''
+  } else {
+    // 选择时间段
+    selectedDay.value = dayOfWeek
+    selectedStartTime.value = startTime
+    selectedEndTime.value = endTime
+    
+    // 自动填充到表单中
+    maxAppointments.value = 5
   }
+}
   
   // 生成网格单元格
   const generateGridCells = () => {
@@ -1145,47 +1361,95 @@ if (!requireAuth()) {
     selectedEndTime.value = ''
   }
   
+  // 添加预约时间
+const addAppointmentTime = () => {
+  
+  // 找到对应的天
+  const dayData = weekDays.value.find(d => d.dayOfWeek === selectedDay.value)
+  if (!dayData) return
+  
+  // 检查是否已存在相同的时间段
+  const exists = dayData.slots.some(slot => 
+    slot.start_time === selectedStartTime.value && slot.end_time === selectedEndTime.value
+  )
+  
+  if (exists) {
+    ElMessage.warning('该时间段已存在')
+    return
+  }
+  
+  // 添加新的时间段
+  const newSlot = {
+    start_time: selectedStartTime.value,
+    end_time: selectedEndTime.value,
+    max_appointments: maxAppointments.value,
+    booked_count: 0,
+    is_available: true
+  }
+  
+  // 使用Vue.set或直接替换数组来触发响应式更新
+  dayData.slots = [...dayData.slots, newSlot]
+  
+  ElMessage.success('预约时间添加成功')
+  resetAppointmentSettings()
+}
+
   // 保存预约时间设置
-  const saveAppointmentSettings = async () => {
-    if (!selectedDay.value || !selectedStartTime.value || !selectedEndTime.value) {
-      ElMessage.warning('请选择完整的预约时间设置')
-      return
+const saveAppointmentSettings = async () => {
+  
+  saving.value = true
+  try {
+    // 直接从localStorage获取token
+    const token = localStorage.getItem('vue3project_token')
+    
+    // 构建请求数据
+    const requestData = {
+      token: token,
+      counselor_id: counselorForm.user_id,
+      available_info: []
     }
     
-    saving.value = true
-    try {
-      // 直接从localStorage获取token
-      const token = localStorage.getItem('vue3project_token')
-      
-      // 调用保存预约时间设置的API
-      const data = await request({
-        url: '/api/appointment/available',
-        method: 'POST',
-        params: {
-          token: token
-        },
-        data: {
-          counselor_id: counselorForm.id,
-          day_of_week: selectedDay.value,
-          start_time: selectedStartTime.value,
-          end_time: selectedEndTime.value,
-          max_appointments: maxAppointments.value
-        }
-      })
-      
-      if (data && data.code === 200) {
-        ElMessage.success('预约时间设置保存成功')
-        await fetchCounselorSchedule() // 重新获取数据
-        resetAppointmentSettings() // 重置表单
-      } else {
-        throw new Error(data.message || '保存失败')
+    // 将选中的时间段添加到请求数据
+    weekDays.value.forEach(day => {
+      if (day.slots && day.slots.length > 0) {
+        day.slots.forEach(slot => {
+          requestData.available_info.push({
+            day_of_week: day.dayOfWeek,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            max_appointments: slot.max_appointments
+          })
+        })
       }
-    } catch (error) {
-      ElMessage.error(error.message || '保存预约时间设置失败')
-    } finally {
-      saving.value = false
+    })
+    
+    // 所有时间段都已经在weekDays中，无需额外处理
+    
+    console.log('发送预约设置请求:', requestData)
+    
+    // 调用保存预约时间设置的API
+    const data = await request({
+      url: '/api/counselor/available',
+      method: 'POST',
+      data: requestData
+    })
+    
+    console.log('保存预约设置响应:', data)
+    
+    if (data && data.code === 200) {
+      ElMessage.success('预约时间设置保存成功')
+      await fetchCounselorSchedule() // 重新获取数据
+      resetAppointmentSettings() // 重置表单
+    } else {
+      throw new Error(data.message || '保存失败')
     }
+  } catch (error) {
+    console.error('保存预约设置错误:', error)
+    ElMessage.error(error.message || '保存预约时间设置失败')
+  } finally {
+    saving.value = false
   }
+}
   
   // 重置预约时间设置表单
   const resetAppointmentSettings = () => {
@@ -1394,16 +1658,16 @@ if (!requireAuth()) {
             border: 1px solid var(--border-color);
             padding: 0;
             text-align: center;
-            width: 150px;
+            width: 120px;
             height: 80px;
           }
           
           th {
-            background-color: var(--primary-color);
-            color: white;
-            font-weight: 600;
-            font-size: 16px;
-          }
+                background-color: var(--secondary-color);
+                color: var(--text-secondary);
+                font-weight: 600;
+                font-size: 16px;
+              }
           
           th:first-child,
           td:first-child {
@@ -1415,13 +1679,13 @@ if (!requireAuth()) {
           }
           
           .slot-cell {
-            background-color: var(--background-color);
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 14px;
-            width: 150px;
-            height: 80px;
-          }
+          background-color: var(--background-color);
+          cursor: pointer;
+          transition: all 0.3s;
+          font-size: 14px;
+          width: 150px;
+          height: 45px;
+        }
           
           .slot-cell:hover {
             background-color: rgba(var(--primary-color), 0.1);
@@ -1434,15 +1698,19 @@ if (!requireAuth()) {
         }
         
         .slot-indicator {
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          height: 100%;
-          font-size: 12px;
-          font-weight: bold;
-          white-space: pre-line;
-        }
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                align-items: center !important;
+                height: 100% !important;
+                font-size: 20px !important;
+                font-weight: bold !important;
+                white-space: pre-line !important;
+                line-height: 1.2 !important;
+                padding: 2px !important;
+                margin: 2px !important;
+                border-radius: 30px !important;
+              }
         }
       }
       
