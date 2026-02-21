@@ -25,6 +25,23 @@
                 label-width="100px"
                 class="profile-form"
               >
+                <el-form-item label="头像" prop="avatar">
+                  <div class="avatar-upload">
+                    <img v-if="studentForm.avatar" :src="getAvatarUrl(studentForm.avatar)" class="avatar-preview" />                    <el-upload
+                      class="avatar-uploader"
+                      action="#"
+                      :show-file-list="false"
+                      :before-upload="beforeAvatarUpload"
+                      :http-request="() => {}"
+                      accept="image/*"
+                    >
+                      <template #trigger>
+                        <el-button size="small" type="primary">选择头像</el-button>
+                      </template>
+                    </el-upload>
+                  </div>
+                </el-form-item>
+                
                 <el-form-item label="学号" prop="student_id">
                   <el-input v-model="studentForm.student_id" />
                 </el-form-item>
@@ -68,6 +85,24 @@
                 label-width="100px"
                 class="profile-form"
               >
+                <el-form-item label="头像" prop="avatar">
+                  <div class="avatar-upload">
+                    <img v-if="counselorForm.avatar" :src="getAvatarUrl(counselorForm.avatar)" class="avatar-preview" />
+                    <el-upload
+                      class="avatar-uploader"
+                      action="#"
+                      :show-file-list="false"
+                      :before-upload="beforeAvatarUpload"
+                      :http-request="uploadAvatar"
+                      accept="image/*"
+                    >
+                      <template #trigger>
+                        <el-button size="small" type="primary">选择头像</el-button>
+                      </template>
+                    </el-upload>
+                  </div>
+                </el-form-item>
+                
                 <el-form-item label="专业领域" prop="specialty">
                   <el-input v-model="counselorForm.specialty" />
                 </el-form-item>
@@ -388,7 +423,14 @@ if (!requireAuth()) {
     gender: '',
     age: 18,
     avatar: '',
+    avatarBase64: '',
+    avatarBytes: null,
     status: 1
+  })
+  
+  // 确保表单数据正确初始化
+  onMounted(() => {
+    fetchStudentProfile()
   })
   
   const counselorForm = reactive({
@@ -397,7 +439,9 @@ if (!requireAuth()) {
     specialty: '',
     work_experience: 0,
     introduction: '',
-    status: 1
+    status: 1,
+    avatarBase64: '',
+    avatarBytes: null
   })
   
   const adminForm = reactive({
@@ -756,34 +800,40 @@ if (!requireAuth()) {
       if (valid) {
         updating.value = true
         try {
+          // 如果有选择的头像文件，先上传
+    
+          
           // 直接从localStorage获取token
           const token = localStorage.getItem('vue3project_token')
           
           const data = await request({
-            url: '/api/userinfo',
-            method: 'PUT',
-            params: {
-              token: token
-            },
-            data: {
-              user_info: {
-                real_name: studentForm.real_name,
-                gender: studentForm.gender,
-                age: studentForm.age,
-                avatar: studentForm.avatar,
-                status: studentForm.status
-              },
-              student_info: {
-                student_id: parseInt(studentForm.student_id),
-                school: studentForm.school,
-                major: studentForm.major,
-                grade: studentForm.grade,
-                emergency_contact: studentForm.emergency_contact,
-                emergency_phone: studentForm.emergency_phone,
-                psychological_status: studentForm.psychological_status
-              }
-            }
-          })
+        url: '/api/userinfo',
+        method: 'PUT',
+        params: {
+          token: token
+        },
+        data: {
+          token: token,
+          user_info: {
+            real_name: studentForm.real_name,
+            gender: studentForm.gender,
+            age: studentForm.age,
+            avatar: studentForm.avatarFileName || studentForm.avatar,
+            avatarImage: avatarBase64String || undefined,
+           
+            status: studentForm.status
+          },
+          student_info: {
+            student_id: parseInt(studentForm.student_id),
+            school: studentForm.school,
+            major: studentForm.major,
+            grade: studentForm.grade,
+            emergency_contact: studentForm.emergency_contact,
+            emergency_phone: studentForm.emergency_phone,
+            psychological_status: studentForm.psychological_status
+          }
+        }
+      })
           
           if (data && data.code === 200) {
             ElMessage.success('学生资料更新成功')
@@ -808,20 +858,24 @@ if (!requireAuth()) {
       if (valid) {
         updating.value = true
         try {
+          // 如果有选择的头像文件，先上传
+      
+          
           // 直接从localStorage获取token
           const token = localStorage.getItem('vue3project_token')
           
           const data = await request({
             url: '/api/counselor',
             method: 'PUT',
-            params: {
-              token: token
-            },
             data: {
+              token: token,
               specialty: counselorForm.specialty,
               workExperience: counselorForm.work_experience,
               introduction: counselorForm.introduction,
-              status: counselorForm.status
+              status: counselorForm.status,
+              avatar: counselorForm.avatarFileName || counselorForm.avatar,
+              avatarImage: avatarBase64String || undefined,
+             
             }
           })
           
@@ -1459,16 +1513,294 @@ const saveAppointmentSettings = async () => {
     maxAppointments.value = 5
   }
   
-  // 重置表单
-  const resetForm = () => {
-    if (userInfo.value && userInfo.value.role === 0) {
-      fetchStudentProfile()
-    } else if (userInfo.value && userInfo.value.role === 1) {
-      fetchCounselorProfile()
-    } else if (userInfo.value && userInfo.value.role === 2) {
-      fetchAdminProfile()
+  // 获取头像URL
+  const getAvatarUrl = (avatar) => {
+  if (!avatar) return ''
+  
+  // 如果是blob URL，直接返回
+  if (avatar.startsWith('blob:')) {
+    return avatar
+  }
+  
+  // 如果是相对路径，则从assets/images获取
+  if (avatar.startsWith('/') || !avatar.startsWith('http')) {
+    // 去掉开头的/，然后从assets/images获取
+    const fileName = avatar.replace(/^\//, '')
+    return `/src/assets/images/${fileName}`
+  }
+  
+  return avatar
+}
+
+// 头像上传前检查
+const beforeAvatarUpload = (file) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt2M = file.size / 1024 / 1024 < 2
+  
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件!')
+    return false
+  }
+  if (!isLt2M) {
+    ElMessage.error('图片大小不能超过2MB!')
+    return false
+  }
+  
+  // 存储文件但不上传
+    selectedAvatarFile = file
+    
+    // 生成预览URL
+    const previewUrl = URL.createObjectURL(file)
+    
+    // 更新表单中的头像预览
+    const userId = userInfo.value?.id || ''
+    const userRole = userInfo.value?.role === 0 ? 'student' : 'counselor'
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${userId}.${fileExt}`
+    const avatarPath = `/images/${fileName}`
+    
+    // 在上传前处理文件
+    handleFileUpload(file).then(base64 => {
+      if (base64) {
+        console.log('base64转换成功，前50个字符:', base64.substring(0, 50))
+        // 存储base64编码到全局变量
+        avatarBase64String = base64
+        
+        if (userRole === 'student') {
+          studentForm.avatarFileName = fileName // 存储文件名
+        } else {
+          counselorForm.avatarFileName = fileName // 存储文件名
+        }
+      } else {
+        console.error('base64为空')
+        ElMessage.error('图片转换失败')
+      }
+    }).catch(error => {
+      console.error('转换图片为base64失败:', error)
+      ElMessage.error('处理图片失败')
+    })
+    
+    if (userRole === 'student') {
+      studentForm.avatar = previewUrl // 使用预览URL显示图片
+    } else {
+      counselorForm.avatar = previewUrl // 使用预览URL显示图片
+    }
+  
+  ElMessage.success('头像选择成功，请点击保存更改以完成上传')
+  return false // 阻止自动上传
+}
+
+// 存储选择的头像文件
+  let selectedAvatarFile = null
+  
+  // 存储base64编码字符串
+  let avatarBase64String = ''
+  
+  // 使用FileReader将文件转换为base64
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = error => reject(error)
+    })
+  }
+  
+  // 在上传前处理文件
+  const handleFileUpload = async (file) => {
+    try {
+      console.log('开始处理文件:', file.name, file.size)
+      const base64 = await fileToBase64(file)
+      console.log('文件转换为base64成功，长度:', base64.length)
+      // 去掉data:image/jpeg;base64,前缀，只保留纯base64编码
+      const pureBase64 = base64.split(',')[1]
+      console.log('去掉前缀后的base64长度:', pureBase64.length)
+      return pureBase64
+    } catch (error) {
+      console.error('Error converting file to base64:', error)
+      return null
     }
   }
+  
+
+  
+  // 真正上传头像并保存到本地
+  // const uploadAvatarToServer = async () => {
+  //   if (!selectedAvatarFile) {
+  //     ElMessage.warning('请先选择头像')
+  //     return
+  //   }
+    
+  //   try {
+  //     const formData = new FormData()
+      
+  //     // 获取用户ID和角色
+  //     const userId = userInfo.value?.id || ''
+  //     const userRole = userInfo.value?.role === 0 ? 'student' : 'counselor'
+      
+  //     // 生成文件名：用户ID.扩展名
+  //     const fileExt = selectedAvatarFile.name.split('.').pop()
+  //     const fileName = `${userId}.${fileExt}`
+      
+  //     formData.append('file', selectedAvatarFile)
+  //     formData.append('fileName', fileName)
+      
+  //     // 根据角色选择不同的API
+  //     const apiUrl = userRole === 'student' ? '/api/userinfo' : '/api/counselor'
+      
+  //     const response = await fetch(apiUrl, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'multipart/form-data'
+  //       },
+  //       body: formData
+  //     })
+      
+  //     // 检查响应状态
+  //     if (!response.ok) {
+  //       throw new Error(`上传失败: ${response.status} ${response.statusText}`)
+  //     }
+      
+  //     let data
+  //     try {
+  //       data = await response.json()
+  //     } catch (error) {
+  //       console.error('JSON解析错误:', error)
+  //       // 尝试获取响应文本
+  //       const responseText = await response.text()
+  //       console.error('响应文本:', responseText)
+  //       throw new Error('服务器响应格式错误')
+  //     }
+      
+  //     if (data.code === 200) {
+  //       // 保存图片到本地assets/images目录
+  //       saveImageToLocal(selectedAvatarFile, fileName)
+        
+  //       ElMessage.success('头像上传并保存成功')
+  //     } else {
+  //       ElMessage.error(data.message || '上传失败')
+  //     }
+  //   } catch (error) {
+  //     console.error('上传头像错误:', error)
+  //     ElMessage.error('上传失败，请重试')
+  //   }
+  // }
+  
+  // 保存图片到本地
+  // const saveImageToLocal = async (file, fileName) => {
+  //   try {
+  //     // 创建一个临时URL来读取文件
+  //     const reader = new FileReader()
+  //     // 现代浏览器使用文件系统API
+  //     const dirHandle = await window.showDirectoryPicker({
+  //       mode: 'readwrite'
+  //     })
+
+  //     // 指定保存到特定目录
+  //     const targetPath = 'C:\\Users\\ym\\Desktop\\GraduationProject\\vue3project\\src\\assets\\images'
+  //     // 使用Node.js fs模块保存（如果可用）
+  //     if (typeof require !== 'undefined') {
+  //       const fs = require('fs')
+  //       const path = require('path')
+        
+  //       const fullPath = path.join(targetPath, fileName)
+  //       fs.writeFileSync(fullPath, Buffer.from(await file.arrayBuffer()))
+        
+  //       ElMessage.success(`图片已保存到 ${fileName}`)
+  //       return
+  //     }
+
+  //     // 否则使用浏览器下载
+  //     const url = URL.createObjectURL(file)
+  //     const a = document.createElement('a')
+  //     a.href = url
+  //     a.download = fileName
+  //     document.body.appendChild(a)
+  //     a.click()
+  //     document.body.removeChild(a)
+  //     URL.revokeObjectURL(url)
+
+  //     ElMessage.success(`图片已下载为 ${fileName}，请手动保存到 ${targetPath}`)
+  //     const fileHandle = await dirHandle.getFileHandle(fileName)
+  //     const writable = await fileHandle.createWritable()
+  //     await writable.write(file) // 直接写入原始文件
+  //     await writable.close()
+  //     reader.onload = (e) => {
+  //       try {
+  //         // 创建图片元素
+  //         const img = new Image()
+  //         img.onload = () => {
+  //           // 创建canvas来转换图片
+  //           const canvas = document.createElement('canvas')
+  //           const ctx = canvas.getContext('2d')
+            
+  //           // 设置canvas尺寸
+  //           canvas.width = img.width
+  //           canvas.height = img.height
+            
+  //           // 绘制图片到canvas
+  //           ctx.drawImage(img, 0, 0)
+            
+  //           // 转换为blob并保存到指定路径
+  //           canvas.toBlob(async (blob) => {
+  //             try {
+  //               // 使用File System Access API保存到本地
+  //               if ('showDirectoryPicker' in window) {
+  //                 // 现代浏览器使用文件系统API
+  //                 const dirHandle = await window.showDirectoryPicker({
+  //                   mode: 'readwrite'
+  //                 })
+                  
+  //                 const fileHandle = await dirHandle.getFileHandle(fileName)
+  //                 const writable = await fileHandle.createWritable()
+  //                 await writable.write(file)
+  //                 await writable.close()
+                  
+  //                 ElMessage.success(`图片已保存到 ${fileName}`)
+  //               } else {
+  //                 // 传统浏览器使用下载方式
+  //                 const url = URL.createObjectURL(blob)
+  //                 const a = document.createElement('a')
+  //                 a.href = url
+  //                 a.download = fileName
+  //                 document.body.appendChild(a)
+  //                 a.click()
+  //                 document.body.removeChild(a)
+  //                 URL.revokeObjectURL(url)
+                  
+  //                 ElMessage.success(`图片已下载为 ${fileName}，请手动保存到 C:\\Users\\ym\\Desktop\\GraduationProject\\vue3project\\src\\assets\\images`)
+  //               }
+  //             } catch (error) {
+  //               console.error('保存文件失败:', error)
+  //               ElMessage.error('保存文件失败')
+  //             }
+  //           }, 'image/jpeg', 0.9)
+  //         }
+          
+  //         img.src = e.target.result
+  //       } catch (error) {
+  //         console.error('保存图片失败:', error)
+  //         ElMessage.error('保存图片失败')
+  //       }
+  //     }
+      
+  //     reader.readAsDataURL(file)
+  //   } catch (error) {
+  //     console.error('保存图片错误:', error)
+  //     ElMessage.error('保存图片失败')
+  //   }
+  // }
+
+// 重置表单
+const resetForm = () => {
+  if (userInfo.value && userInfo.value.role === 0) {
+    fetchStudentProfile()
+  } else if (userInfo.value && userInfo.value.role === 1) {
+    fetchCounselorProfile()
+  } else if (userInfo.value && userInfo.value.role === 2) {
+    fetchAdminProfile()
+  }
+}
   
   // 重置密码表单
   const resetPasswordForm = () => {
@@ -1560,10 +1892,31 @@ const saveAppointmentSettings = async () => {
     }
     
     .profile-form {
-      .el-form-item {
-        margin-bottom: 20px;
-      }
+    .el-form-item {
+      margin-bottom: 20px;
     }
+  }
+
+  /* 头像上传样式 */
+  .avatar-upload {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .avatar-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #ddd;
+  }
+
+  .avatar-uploader {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
     
     .mental-health-stats {
       grid-column: span 2;
