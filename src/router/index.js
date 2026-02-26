@@ -51,6 +51,16 @@ const routes = [
     path: '/usercenter/appointments',
     name: 'AppointmentManagement',
     component: () => import('@/views/usercenter/AppointmentManagement.vue')
+  },
+  {
+    path: '/counselors',
+    name: 'Counselors',
+    component: () => import('@/views/Counselors.vue')
+  },
+  {
+    path: '/counselor/:id',
+    name: 'CounselorDetail',
+    component: () => import('@/views/CounselorDetail.vue')
   }
 ]
 

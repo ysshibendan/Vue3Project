@@ -23,26 +23,26 @@
       <div class="nav-bg" id="navbr">
         <div class="nav">
           <ul>
-            <li class="hover"><a href="https://www.dukou.me" title="网站首页">网站首页</a></li>
+            <li class="hover"><router-link to="/" class="first-level" title="网站首页">网站首页</router-link></li>
             <li class="">
-              <a href="/xinlizixun/" class="first-level">
+              <router-link to="/counselors" class="first-level">
                 心理咨询
-              </a>
+              </router-link>
             </li>
             <li class="">
-              <a href="/zixunshi/" class="first-level">
+              <router-link to="/counselors" class="first-level">
                 心理咨询师
-              </a>
+              </router-link>
             </li>
             <li class="">
-              <a href="/chat/" class="first-level">
+              <router-link to="/chat" class="first-level">
                 智能聊天
-              </a>
+              </router-link>
             </li>
             <li class="">
-              <a href="/ceping/" class="first-level">
+              <router-link to="/test" class="first-level">
                 心理测评
-              </a>
+              </router-link>
             </li>
           </ul>
         </div>
@@ -218,9 +218,10 @@
           <!-- 咨询师列表 -->
           <div class="counselor-list">
             <div 
-              v-for="(counselor, index) in counselorList" 
+            v-for="(counselor, index) in counselorList" 
               :key="index" 
               class="counselor-card"
+               @click="goToCounselorDetail(counselor.userInfo.id)"
               @mouseenter="handleCardHover(index, true)"
               @mouseleave="handleCardHover(index, false)"
             >
@@ -623,9 +624,28 @@ const getCounselorAvatar = (avatar) => {
     // 使用默认头像
     return '/images/head.webp'
   }
+  
+  // 如果是相对路径，则从assets/images获取
+  if (avatar.startsWith('/') || !avatar.startsWith('http')) {
+    // 去掉开头的/，然后从assets/images获取
+    const fileName = avatar.replace(/^\//, '')
+    return `/src/assets/images/${fileName}`
+  }
+  
   return avatar
 }
-
+// 跳转到咨询师详情页
+// 跳转到咨询师详情页
+const goToCounselorDetail = (counselorId) => {
+  console.log('点击咨询师，ID:', counselorId)
+  if (counselorId) {
+    // 保存咨询师列表到本地存储，供详情页使用
+    localStorage.setItem('counselors_list', JSON.stringify(counselorList.value))
+    router.push(`/counselor/${counselorId}`)
+  } else {
+    console.error('咨询师ID为空，无法跳转')
+  }
+}
 // 组件卸载时清除自动轮播
 onUnmounted(() => {
   stopAutoPlay()
@@ -1171,6 +1191,8 @@ main {
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .counselor-card:hover {
@@ -1212,8 +1234,8 @@ main {
 }
 
 .counselor-info.hovered {
-  height: 125px;
-  transform: translateY(-50px);
+  height: 180px;
+  transform: translateY(0px);
   background-color: rgba(255, 255, 255, 0.95);
 }
 

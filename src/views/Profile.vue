@@ -334,6 +334,108 @@
             </div>
           </div>
           
+          <!-- 独立容器：咨询师预约管理 -->
+          <div v-if="userInfo && userInfo.role === 1" class="appointment-management-container" style="margin-top: 120px;">
+            <div class="appointment-management card-container">
+              <h2>预约管理</h2>
+              
+              <div class="appointment-filters" style="margin-bottom: 10px; margin-left: 60px;">
+                <el-form :inline="true" :model="appointmentFilter">
+                  <el-form-item label="状态">
+                    <el-select v-model="appointmentFilter.status" placeholder="请选择状态" clearable @change="loadAppointments">
+                      <el-option label="全部" value="-1" />
+                      <el-option label="待确认" value="0" />
+                      <el-option label="已确认" value="1" />
+                      <el-option label="已完成" value="2" />
+                      <el-option label="已取消" value="3" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="日期范围">
+                    <el-date-picker
+                      v-model="appointmentFilter.dateRange"
+                      type="daterange"
+                      range-separator="至"
+                      start-placeholder="开始日期"
+                      end-placeholder="结束日期"
+                      format="YYYY-MM-DD"
+                      value-format="YYYY-MM-DD"
+                      @change="loadAppointments"
+                    />
+                  </el-form-item>
+                  <el-form-item>
+                    <el-button type="primary" @click="loadAppointments">查询</el-button>
+                  </el-form-item>
+                </el-form>
+              </div>
+              
+              <div class="appointment-list" v-loading="loadingAppointments">
+                <div v-if="appointments.length === 0" class="empty-state">
+                  <el-empty description="暂无预约信息" />
+                </div>
+                
+                <div v-else class="appointment-table">
+                  <table class="appointment-table-content">
+                    <thead>
+                      <tr>
+                        <th style="width: 20%; text-align: center;">学生姓名</th>
+                        <th style="width: 20%; text-align: center;">预约日期</th>
+                        <th style="width: 20%; text-align: center;">预约时间</th>
+                        <th style="width: 20%; text-align: center;">创建时间</th>
+                        <th style="width: 15%; text-align: center;">状态</th>
+                        <th style="width: 20%; text-align: center;">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="appointment in appointments" :key="appointment.id">
+                        <td style="text-align: center;">{{ appointment.userName }}</td>
+                        <td style="text-align: center;">{{ appointment.appointmentDate }}</td>
+                        <td style="text-align: center;">{{ appointment.startTime }} - {{ appointment.endTime }}</td>
+                        <td style="text-align: center;">{{ formatDate(appointment.createdAt) }}</td>
+                        <td style="text-align: center;">
+                          <el-tag :type="getAppointmentStatusType(appointment.status).type" size="small">
+                            {{ getAppointmentStatusType(appointment.status).text }}
+                          </el-tag>
+                        </td>
+                        <td>
+                          <el-button 
+                            v-if="appointment.status === 0" 
+                            type="success" 
+                            size="small" 
+                            @click="updateAppointmentStatus(appointment.id, 1)"
+                            :loading="updatingStatus === appointment.id"
+                          >
+                            接受
+                          </el-button>
+                          
+                          <el-button 
+                            v-if="appointment.status === 0 || appointment.status === 1" 
+                            type="danger" 
+                            size="small" 
+                            @click="showCancelDialog(appointment)"
+                          >
+                            取消
+                          </el-button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <div class="pagination-container" v-if="appointments.length > 0">
+                <el-pagination
+                  :current-page="pagination.page"
+                  :page-size="pagination.pageSize"
+                  :page-sizes="[10, 20, 50, 100]"
+                  layout="total, sizes, prev, pager, next, jumper"
+                  :total="pagination.total"
+                  @size-change="handleSizeChange"
+                  @current-change="handleCurrentChange"
+                />
+              </div>
+            </div>
+          </div>
+          
           <!-- 独立容器：心理健康统计 -->
           <!-- <div class="mental-health-container">
             <div class="mental-health-stats card-container">
@@ -382,6 +484,7 @@ import { useAuth } from '@/composables/useAuth'
 import request from '@/utils/request'
 import AppHeader from '@/components/common/Header.vue'
 import AppSidebar from '@/components/common/Sidebar.vue'
+import { getCounselorAppointments, updateAppointmentStatus, cancelAppointment } from '@/api/appointment'
   
   const authStore = useAuthStore()
 const { requireAuth } = useAuth()
@@ -719,6 +822,14 @@ if (!requireAuth()) {
           counselorForm.status = data.data.counselorInfo.status !== undefined ? data.data.counselorInfo.status : 1
         }
         
+        // 设置用户信息（包括头像）
+        if (data.data.userInfo) {
+          counselorForm.avatar = data.data.userInfo.avatar || ''
+          counselorForm.real_name = data.data.userInfo.realName || ''
+          counselorForm.gender = data.data.userInfo.gender || ''
+          counselorForm.age = data.data.userInfo.age || 18
+        }
+        
         // 更新store中的用户信息
         if (data.data.userInfo) {
           authStore.setUserInfo(data.data.userInfo)
@@ -869,13 +980,18 @@ if (!requireAuth()) {
             method: 'PUT',
             data: {
               token: token,
-              specialty: counselorForm.specialty,
-              workExperience: counselorForm.work_experience,
-              introduction: counselorForm.introduction,
-              status: counselorForm.status,
-              avatar: counselorForm.avatarFileName || counselorForm.avatar,
-              avatarImage: avatarBase64String || undefined,
-             
+              user_info: {
+                real_name: counselorForm.real_name,
+                gender: counselorForm.gender,
+                age: counselorForm.age,
+                avatar: counselorForm.avatarFileName || counselorForm.avatar,
+                avatarImage: avatarBase64String || undefined,
+              },
+              counselor_info: {
+                specialty: counselorForm.specialty,
+                work_experience: counselorForm.work_experience,
+                introduction: counselorForm.introduction
+              }
             }
           })
           
@@ -1812,6 +1928,129 @@ const resetForm = () => {
     }
   }
   
+  // 预约管理相关数据
+  const appointments = ref([])
+  const loadingAppointments = ref(false)
+  const updatingStatus = ref(null)
+  const appointmentFilter = reactive({
+    status: '-1',
+    dateRange: null
+  })
+  const pagination = reactive({
+    page: 1,
+    pageSize: 10,
+    total: 0
+  })
+  
+  // 获取预约列表
+  const loadAppointments = async () => {
+    loadingAppointments.value = true
+    try {
+      const startDate = appointmentFilter.dateRange ? appointmentFilter.dateRange[0] : ''
+      const endDate = appointmentFilter.dateRange ? appointmentFilter.dateRange[1] : ''
+      
+      const response = await getCounselorAppointments(
+        pagination.page,
+        pagination.pageSize,
+        parseInt(appointmentFilter.status),
+        startDate,
+        endDate
+      )
+      
+      if (response.code === 200) {
+        appointments.value = response.data || []
+        pagination.total = response.total || 0
+      } else {
+        ElMessage.error(response.message || '获取预约列表失败')
+      }
+    } catch (error) {
+      console.error('获取预约列表失败:', error)
+      ElMessage.error('获取预约列表失败')
+    } finally {
+      loadingAppointments.value = false
+    }
+  }
+  
+  // 更新预约状态
+  const handleUpdateAppointmentStatus = async (appointmentId, status) => {
+    updatingStatus.value = appointmentId
+    try {
+      const response = await updateAppointmentStatus(appointmentId, status)
+      if (response.code === 200) {
+        ElMessage.success(status === 1 ? '已接受预约' : '预约状态已更新')
+        await loadAppointments() // 重新加载预约列表
+      } else {
+        ElMessage.error(response.message || '更新预约状态失败')
+      }
+    } catch (error) {
+      console.error('更新预约状态失败:', error)
+      ElMessage.error('更新预约状态失败')
+    } finally {
+      updatingStatus.value = null
+    }
+  }
+  
+  // 显示取消预约对话框
+  const showCancelDialog = (appointment) => {
+    ElMessageBox.prompt('请输入取消原因', '取消预约', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputPattern: /^.{1,200}$/,
+      inputErrorMessage: '取消原因不能为空且不超过200个字符'
+    }).then(async ({ value }) => {
+      try {
+        const response = await cancelAppointment(appointment.id, value)
+        if (response.code === 200) {
+          ElMessage.success('预约已取消')
+          await loadAppointments() // 重新加载预约列表
+        } else {
+          ElMessage.error(response.message || '取消预约失败')
+        }
+      } catch (error) {
+        console.error('取消预约失败:', error)
+        ElMessage.error('取消预约失败')
+      }
+    }).catch(() => {
+      // 用户取消操作
+    })
+  }
+  
+  // 获取预约状态类型
+  const getAppointmentStatusType = (status) => {
+    const statusMap = {
+      0: { type: 'warning', text: '待确认' },
+      1: { type: 'success', text: '已确认' },
+      2: { type: 'info', text: '已完成' },
+      3: { type: 'danger', text: '已取消' }
+    }
+    return statusMap[status] || { type: 'info', text: '未知状态' }
+  }
+  
+  // 格式化日期
+  const formatDate = (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  
+  // 分页相关方法
+  const handleSizeChange = (size) => {
+    pagination.pageSize = size
+    pagination.page = 1
+    loadAppointments()
+  }
+  
+  const handleCurrentChange = (page) => {
+    pagination.page = page
+    loadAppointments()
+  }
+  
   onMounted(async () => {
     try {
       // 直接从localStorage获取token
@@ -1831,6 +2070,7 @@ const resetForm = () => {
       } else if (userInfo.value && userInfo.value.role === 1) {
         await fetchCounselorProfile()
         await fetchCounselorSchedule()
+        await loadAppointments() // 加载预约列表
       } else if (userInfo.value && userInfo.value.role === 2) {
         await fetchAdminProfile()
       }
@@ -1972,6 +2212,92 @@ const resetForm = () => {
       .appointment-settings {
         h2 {
           margin-bottom: 20px;
+        }
+      }
+    }
+    
+    // 预约管理容器样式
+    .appointment-management-container {
+      margin-top: 120px;
+      
+      .appointment-management {
+        h2 {
+          margin-bottom: 20px;
+        }
+        
+        .appointment-filters {
+          background-color: #f5f5f5;
+          padding: 15px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+        }
+        
+        .appointment-list {
+          .empty-state {
+            text-align: center;
+            padding: 40px 0;
+          }
+          
+          .appointment-table {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            
+            .appointment-table-content {
+              width: 100%;
+              border-collapse: collapse;
+              
+              thead {
+                tr {
+                  background-color: #f8f9fa;
+                  
+                  th {
+                    padding: 24px 40px;
+                    font-weight: 600;
+                    color: #495057;
+                    font-size: 14px;
+                    text-align: center;
+                    border-bottom: 1px solid #e9ecef;
+                  }
+                }
+              }
+              
+              tbody {
+                tr {
+                  transition: all 0.3s ease;
+                  
+                  &:hover {
+                    background-color: #f8f9fa;
+                  }
+                  
+                  td {
+                    padding: 24px 40px ;
+                    font-size: 15px;
+                    color: #495057;
+                    text-align: center;
+                    border-bottom: 1px solid #e9ecef;
+                    
+                    &:first-child {
+                      font-weight: 600;
+                      color: #212529;
+                    }
+                    
+                    &:last-child {
+                      display: flex;
+                      gap: 8px;
+                      justify-content: center;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        .pagination-container {
+          display: flex;
+          justify-content: center;
+          margin-top: 20px;
         }
       }
     }
