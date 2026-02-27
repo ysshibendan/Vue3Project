@@ -57,7 +57,7 @@
             <div v-for="(image, index) in carouselImages" :key="index" class="carousel-image">
               <img :src="image" alt="心理健康咨询">
               <!-- 轮播图1的小容器 -->
-              <div v-if="index === 0" class="image-overlay" @click="handleStartConsultation">
+              <div v-if="index === 0" class="image-overlay" @click="goToTest">
                 <div class="overlay-title"></div>
                 <div class="overlay-desc"></div>
                 <div class="overlay-button carousel1-button">
@@ -496,6 +496,10 @@ const handleStartConsultation = () => {
     goToLogin()
   }
   
+}
+
+const goToTest = () => {
+  router.push('/test')
 }
 const scrollToSection = (sectionId) => {
   const element = document.getElementById(sectionId)
