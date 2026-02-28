@@ -76,6 +76,133 @@
                 </el-form-item>
               </el-form>
               
+              <!-- 学生预约信息 -->
+              <div v-if="userInfo && userInfo.role === 0" class="student-appointment-container" style="margin-top: 30px;">
+                <div class="student-appointment card-container">
+                  <h2>我的预约</h2>
+                  
+                  <div class="appointment-list" v-loading="loadingStudentAppointments">
+                    <div v-if="studentAppointments.length === 0" class="empty-state">
+                      <el-empty description="暂无预约信息" />
+                    </div>
+                    
+                    <div v-else class="appointment-table">
+                      <table class="appointment-table-content">
+                        <thead>
+                          <tr>
+                            <th style="width: 20%; text-align: center;">咨询师姓名</th>
+                            <th style="width: 20%; text-align: center;">预约日期</th>
+                            <th style="width: 20%; text-align: center;">预约时间</th>
+                            <th style="width: 15%; text-align: center;">状态</th>
+                            <th style="width: 25%; text-align: center;">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="appointment in studentAppointments" :key="appointment.id">
+                            <td style="text-align: center;">{{ appointment.counselorName }}</td>
+                            <td style="text-align: center;">{{ appointment.appointmentDate }}</td>
+                            <td style="text-align: center;">{{ appointment.startTime }} - {{ appointment.endTime }}</td>
+                            <td style="text-align: center;">
+                              <el-tag :type="getAppointmentStatusType(appointment.status).type">
+                                {{ appointment.statusText }}
+                              </el-tag>
+                            </td>
+                            <td style="text-align: center;">
+                              <el-button 
+                                v-if="appointment.status === 1 && isTodayOrAfter(appointment.appointmentDate)" 
+                                type="primary" 
+                                size="small" 
+                                @click="startConsultation(appointment.id)"
+                              >
+                                咨询
+                              </el-button>
+                              <el-button 
+                                v-if="isTodayOrAfter(appointment.appointmentDate)" 
+                                type="danger" 
+                                size="small" 
+                                @click="cancelAppointment(appointment.id)"
+                              >
+                                取消
+                              </el-button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="pagination-container">
+                    <el-pagination
+                    :current-page="appointmentPagination.page"
+                    :page-size="appointmentPagination.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="appointmentPagination.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    @size-change="handleAppointmentSizeChange"
+                    @current-change="handleAppointmentCurrentChange"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 学生问卷结果 -->
+              <div v-if="userInfo && userInfo.role === 0" class="student-questionnaire-container" style="margin-top: 30px;">
+                <div class="student-questionnaire card-container">
+                  <h2>我的问卷结果</h2>
+                  
+                  <div class="questionnaire-list" v-loading="loadingQuestionnaireResults">
+                    <div v-if="questionnaireResults.length === 0" class="empty-state">
+                      <el-empty description="暂无问卷结果" />
+                    </div>
+                    
+                    <div v-else class="questionnaire-table">
+                      <table class="questionnaire-table-content">
+                        <thead>
+                          <tr>
+                            <th style="width: 25%; text-align: center;">问卷名称</th>
+                            <th style="width: 15%; text-align: center;">总分</th>
+                            <th style="width: 15%; text-align: center;">风险等级</th>
+                            <th style="width: 25%; text-align: center;">测试时间</th>
+                            <th style="width: 20%; text-align: center;">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="result in questionnaireResults" :key="result.id">
+                            <td style="text-align: center;">{{ result.templateTitle }}</td>
+                            <td style="text-align: center;">{{ result.totalScore }}</td>
+                            <td style="text-align: center;">
+                              <el-tag :type="getRiskLevelType(result.riskLevel)" size="small">
+                                {{ getRiskLevelText(result.riskLevel) }}
+                              </el-tag>
+                            </td>
+                            <td style="text-align: center;">{{ formatDate(result.createdAt) }}</td>
+                            <td style="text-align: center;">
+                              <el-button 
+                                type="primary" 
+                                size="small" 
+                                @click="viewQuestionnaireDetail(result.id)"
+                              >
+                                查看详情
+                              </el-button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="pagination-container">
+                    <el-pagination
+                    :current-page="questionnairePagination.page"
+                    :page-size="questionnairePagination.pageSize"
+                    :page-sizes="[10, 20, 50, 100]"
+                    :total="questionnairePagination.total"
+                    layout="total, sizes, prev, pager, next, jumper"
+                    @size-change="handleQuestionnaireSizeChange"
+                    @current-change="handleQuestionnaireCurrentChange"
+                    />
+                  </div>
+                </div>
+              </div>
+              
               <!-- 咨询师基本信息 -->
               <el-form
                 v-else-if="userInfo && userInfo.role === 1"
@@ -433,6 +560,7 @@
                   @current-change="handleCurrentChange"
                 />
               </div>
+              
             </div>
           </div>
           
@@ -478,16 +606,19 @@
   
   <script setup>
   import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useAuth } from '@/composables/useAuth'
 import request from '@/utils/request'
 import AppHeader from '@/components/common/Header.vue'
 import AppSidebar from '@/components/common/Sidebar.vue'
-import { getCounselorAppointments, updateAppointmentStatus, cancelAppointment } from '@/api/appointment'
+import { getCounselorAppointments, getUserAppointments, updateAppointmentStatus, cancelAppointment } from '@/api/appointment'
+import { getUserResults } from '@/api/questionnaire'
   
   const authStore = useAuthStore()
 const { requireAuth } = useAuth()
+const router = useRouter()
 
 // 获取用户信息
 const userInfo = computed(() => authStore.userInfo)
@@ -792,7 +923,18 @@ if (!requireAuth()) {
       resolve()
     })
   }
-  
+  // 翻页相关数据
+const appointmentPagination = reactive({
+  page: 1,
+  pageSize: 10,
+  total: 0
+})
+
+const questionnairePagination = reactive({
+  page: 1,
+  pageSize: 10,
+  total: 0
+})
   // 获取咨询师资料
   const fetchCounselorProfile = async () => {
     try {
@@ -1173,7 +1315,29 @@ if (!requireAuth()) {
       }
     })
   }
-  
+  // 预约分页处理
+const handleAppointmentSizeChange = (val) => {
+  appointmentPagination.pageSize = val
+  appointmentPagination.page = 1
+  loadStudentAppointments()
+}
+
+const handleAppointmentCurrentChange = (val) => {
+  appointmentPagination.page = val
+  loadStudentAppointments()
+}
+
+// 问卷结果分页处理
+const handleQuestionnaireSizeChange = (val) => {
+  questionnairePagination.pageSize = val
+  questionnairePagination.page = 1
+  loadQuestionnaireResults()
+}
+
+const handleQuestionnaireCurrentChange = (val) => {
+  questionnairePagination.page = val
+  loadQuestionnaireResults()
+}
   // 判断时间段是否被选中
   const isSelected = (dayOfWeek, startTime, endTime) => {
     return selectedDay.value === dayOfWeek && 
@@ -1936,6 +2100,14 @@ const resetForm = () => {
     status: '-1',
     dateRange: null
   })
+  
+  // 学生预约相关数据
+  const studentAppointments = ref([])
+  const loadingStudentAppointments = ref(false)
+  
+  // 学生问卷结果相关数据
+  const questionnaireResults = ref([])
+  const loadingQuestionnaireResults = ref(false)
   const pagination = reactive({
     page: 1,
     pageSize: 10,
@@ -1968,6 +2140,111 @@ const resetForm = () => {
       ElMessage.error('获取预约列表失败')
     } finally {
       loadingAppointments.value = false
+    }
+  }
+  
+  // 获取学生预约列表
+const loadStudentAppointments = async () => {
+  loadingStudentAppointments.value = true
+  try {
+    const response = await getUserAppointments(
+      appointmentPagination.page,
+      appointmentPagination.pageSize,
+      -1 // 获取所有状态的预约
+    )
+    
+    if (response.code === 200) {
+      studentAppointments.value = response.data || []
+      appointmentPagination.total = response.total || 0
+    } else {
+      ElMessage.error(response.message || '获取预约列表失败')
+    }
+  } catch (error) {
+    console.error('获取学生预约列表失败:', error)
+    ElMessage.error('获取预约列表失败')
+  } finally {
+    loadingStudentAppointments.value = false
+  }
+}
+  
+  // 获取学生问卷结果列表
+const loadQuestionnaireResults = async () => {
+  loadingQuestionnaireResults.value = true
+  try {
+    const token = localStorage.getItem('vue3project_token')
+    const response = await getUserResults({
+      token,
+      page: questionnairePagination.page,
+      page_size: questionnairePagination.pageSize,
+      template_id: -1 // 获取所有问卷结果
+    })
+    
+    if (response.code === 200) {
+      questionnaireResults.value = response.data || []
+      questionnairePagination.total = response.total || 0
+    } else {
+      ElMessage.error(response.message || '获取问卷结果失败')
+    }
+  } catch (error) {
+    console.error('获取问卷结果失败:', error)
+    ElMessage.error('获取问卷结果失败')
+  } finally {
+    loadingQuestionnaireResults.value = false
+  }
+}
+  
+  // 获取风险等级文本
+  const getRiskLevelText = (level) => {
+    const levelMap = {
+      1: '低风险',
+      2: '中风险',
+      3: '高风险'
+    }
+    return levelMap[level] || '未知'
+  }
+  
+  // 获取风险等级类型
+  const getRiskLevelType = (level) => {
+    const typeMap = {
+      1: 'success',
+      2: 'warning',
+      3: 'danger'
+    }
+    return typeMap[level] || 'info'
+  }
+  
+  // 查看问卷详情
+  const viewQuestionnaireDetail = (resultId) => {
+    router.push(`/questionnaire-result/${resultId}`)
+  }
+  
+  // 判断日期是否是今天或今天之后
+  const isTodayOrAfter = (dateStr) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const appointmentDate = new Date(dateStr)
+    return appointmentDate >= today
+  }
+  
+  // 开始咨询
+  const startConsultation = (appointmentId) => {
+    // 这里可以跳转到咨询页面
+    router.push(`/consultation/${appointmentId}`)
+  }
+  
+  // 取消预约
+  const handleCancelAppointment = async (appointmentId) => {
+    try {
+      const response = await cancelAppointment(appointmentId, '学生取消预约')
+      if (response.code === 200) {
+        ElMessage.success('预约取消成功')
+        await loadStudentAppointments() // 重新加载预约列表
+      } else {
+        ElMessage.error(response.message || '取消预约失败')
+      }
+    } catch (error) {
+      console.error('取消预约失败:', error)
+      ElMessage.error('取消预约失败')
     }
   }
   
@@ -2067,6 +2344,8 @@ const resetForm = () => {
       // 根据用户角色获取不同的资料
       if (userInfo.value && userInfo.value.role === 0) {
         await fetchStudentProfile()
+        await loadStudentAppointments() // 加载学生预约列表
+        await loadQuestionnaireResults() // 加载学生问卷结果
       } else if (userInfo.value && userInfo.value.role === 1) {
         await fetchCounselorProfile()
         await fetchCounselorSchedule()
@@ -2204,7 +2483,11 @@ const resetForm = () => {
       }
     }
   }
-  
+  .pagination-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
   // 独立容器样式
     .appointment-settings-container {
       margin-top: 20px;
@@ -2492,6 +2775,151 @@ const resetForm = () => {
     }
   }
   
+  // 学生预约容器样式
+  .student-appointment-container {
+    margin-top: 30px;
+    
+    .student-appointment {
+      h2 {
+        margin-bottom: 20px;
+      }
+      
+      .appointment-list {
+        .empty-state {
+          text-align: center;
+          padding: 40px 0;
+        }
+        
+        .appointment-table {
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+          
+          .appointment-table-content {
+            width: 100%;
+            border-collapse: collapse;
+            
+            thead {
+              tr {
+                background-color: #f8f9fa;
+                
+                th {
+                  padding: 24px 40px;
+                  font-weight: 600;
+                  color: #495057;
+                  font-size: 14px;
+                  text-align: center;
+                  border-bottom: 1px solid #e9ecef;
+                }
+              }
+            }
+            
+            tbody {
+              tr {
+                transition: all 0.3s ease;
+                
+                &:hover {
+                  background-color: #f8f9fa;
+                }
+                
+                td {
+                  padding: 24px 40px ;
+                  font-size: 15px;
+                  color: #495057;
+                  text-align: center;
+                  border-bottom: 1px solid #e9ecef;
+                  
+                  &:first-child {
+                    font-weight: 600;
+                    color: #212529;
+                  }
+                  
+                  &:last-child {
+                    display: flex;
+                    gap: 8px;
+                    justify-content: center;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // 学生问卷结果容器样式
+  .student-questionnaire-container {
+    margin-top: 30px;
+    
+    .student-questionnaire {
+      h2 {
+        margin-bottom: 20px;
+      }
+      
+      .questionnaire-list {
+        .empty-state {
+          text-align: center;
+          padding: 40px 0;
+        }
+        
+        .questionnaire-table {
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+          
+          .questionnaire-table-content {
+            width: 100%;
+            border-collapse: collapse;
+            
+            thead {
+              tr {
+                background-color: #f8f9fa;
+                
+                th {
+                  padding: 24px 40px;
+                  font-weight: 600;
+                  color: #495057;
+                  font-size: 14px;
+                  text-align: center;
+                  border-bottom: 1px solid #e9ecef;
+                }
+              }
+            }
+            
+            tbody {
+              tr {
+                transition: all 0.3s ease;
+                
+                &:hover {
+                  background-color: #f8f9fa;
+                }
+                
+                td {
+                  padding: 24px 40px;
+                  font-size: 15px;
+                  color: #495057;
+                  text-align: center;
+                  border-bottom: 1px solid #e9ecef;
+                  
+                  &:first-child {
+                    font-weight: 600;
+                    color: #212529;
+                  }
+                  
+                  &:last-child {
+                    display: flex;
+                    gap: 8px;
+                    justify-content: center;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   
   @media (max-width: 1200px) {
     .profile-content {

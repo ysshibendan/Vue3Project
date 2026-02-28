@@ -2,6 +2,11 @@ import request from '@/utils/request'
 
 // 发送消息
 export function sendMessage(data) {
+  console.log('发送消息API调用:', {
+    url: '/api/v1/aichat/send',
+    method: 'post',
+    data
+  })
   return request({
     url: '/api/v1/aichat/send',
     method: 'post',
@@ -10,11 +15,13 @@ export function sendMessage(data) {
 }
 
 // 获取聊天记录
-export function getMessageHistory(sessionId, params) {
+export function getMessageHistory(params) {
   return request({
-    url: `/api/v1/aichat/history/${sessionId}`,
+    url: `/api/v1/aichat/history/${params.session_id}`,
     method: 'get',
-    params
+    params: {
+      token: params.token
+    }
   })
 }
 

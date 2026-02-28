@@ -15,7 +15,7 @@
         <div class="action-left">
           <el-tooltip content="清空输入" placement="top">
             <el-button
-              type="text"
+              link
               :icon="Delete"
               @click="handleClear"
               :disabled="disabled || !inputMessage.trim()"
@@ -23,7 +23,7 @@
           </el-tooltip>
           <el-tooltip content="表情" placement="top">
             <el-button
-              type="text"
+              link
               :icon="ChatDotRound"
               @click="handleEmoji"
               :disabled="disabled"
@@ -84,7 +84,9 @@
   // 发送消息
   const handleSend = () => {
     if (!inputMessage.value.trim() || props.disabled || props.loading) return
-    emit('send', inputMessage.value)
+    const message = inputMessage.value
+    inputMessage.value = '' // 清空输入框
+    emit('send', message)
   }
   
   // 清空输入

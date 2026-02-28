@@ -5,16 +5,29 @@ import router from '@/router'
 
 // 创建axios实例
 const service = axios.create({
-  timeout: 10000
+  timeout: 0 // 取消超时限制
 })
 
 // 请求拦截器
 service.interceptors.request.use(
   config => {
     // 首先尝试从localStorage获取token
-    const token = localStorage.getItem('vue3project_token')
+    let token = localStorage.getItem('vue3project_token')
     
-    // 如果localStorage中有token，作为query参数传递
+    // 如果localStorage中没有token，尝试从store获取
+    if (!token) {
+      try {
+        const authStore = useAuthStore()
+        token = authStore.token
+        console.log('从store获取token:', token)
+      } catch (error) {
+        console.error('获取token失败:', error)
+      }
+    } else {
+      console.log('从localStorage获取token:', token)
+    }
+    
+    // 如果有token，根据请求类型添加到请求中
     if (token) {
       // 如果是GET请求，将token作为query参数
       if (config.method === 'get' || config.method === 'GET') {
@@ -22,30 +35,18 @@ service.interceptors.request.use(
           config.params = {}
         }
         config.params.token = token
-
       } else {
-        // 如果是POST/PUT/DELETE等请求，将token作为query参数
-        if (!config.params) {
-          config.params = {}
+        // 如果是POST请求，将token放入请求体中
+        if (!config.data) {
+          config.data = {}
         }
-        config.params.token = token
-
+        config.data.token = token
       }
     } else {
-      // 如果localStorage中没有token，尝试从store获取
-      const authStore = useAuthStore()
-      if (authStore.token) {
-        if (!config.params) {
-          config.params = {}
-        }
-        config.params.token = authStore.token
-
-      } else {
-
-      }
+      console.warn('未找到token，请求可能失败')
     }
-      
-
+    
+    console.log('请求配置:', config)
     return config
   },
   error => {
@@ -57,16 +58,32 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-
-     // 直接返回响应数据，不做额外处理
-     return response.data
+    console.log('原始响应:', response)
+    console.log('响应状态:', response.status)
+    console.log('响应数据:', response.data)
+    
+    // 检查响应结构
+    if (!response) {
+      console.error('响应为空')
+      return Promise.reject(new Error('服务器未响应'))
+    }
+    
+    // 检查HTTP状态码
+    if (response.status !== 200) {
+      console.error('HTTP状态码不是200:', response.status)
+      return Promise.reject(new Error(`请求失败，状态码: ${response.status}`))
+    }
+    
+    // 返回响应数据
+    return response.data
   },
   error => {
-    console.error('响应错误', error)
+    console.error('响应错误:', error)
     
     if (error.code === 'NETWORK_ERROR') {
       ElMessage.error('网络连接失败，请检查网络或服务器状态')
     } else if (error.response) {
+      console.error('错误响应:', error.response)
       ElMessage.error(`服务器错误: ${error.response.status}`)
     } else {
       ElMessage.error(error.message || '网络错误')

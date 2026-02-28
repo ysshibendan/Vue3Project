@@ -1,112 +1,167 @@
 <template>
-    <div class="page-container">
-      <app-header />
+  <div class="page-container">
+    <app-header />
+    
+    <div class="main-content">
+      <app-sidebar />
       
-      <div class="main-content">
-        <app-sidebar />
-        
-        <div class="chat-area">
-          <div class="chat-container">
+      <div class="chat-area">
+        <div class="chat-container">
+          <!-- 左侧会话列表 -->
+          <div class="chat-sidebar">
+            <div class="sidebar-header">
+              <h3>会话列表</h3>
+              <el-button type="primary" :icon="Plus" @click="createNewSession" size="small">
+                新建对话
+              </el-button>
+            </div>
+            
+            <div class="session-list" v-loading="sessionsLoading">
+              <div v-if="sessions.length === 0" class="empty-state">
+                <el-empty description="暂无会话" />
+              </div>
+              
+              <div v-else>
+                <div
+                  v-for="session in sessions"
+                  :key="session.id"
+                  :class="['session-item', { active: currentSessionId === session.id }]"
+                  @click="selectSession(session.id)"
+                >
+                  <div class="session-info">
+                    <h4 class="session-title">{{ session.title }}</h4>
+                    <p class="session-preview">{{ session.lastMessage || '暂无消息' }}</p>
+                    <span class="session-time">{{ formatDate(session.updatedAt) }}</span>
+                  </div>
+                  
+                  <div class="session-actions">
+                    <el-dropdown @command="handleSessionCommand" trigger="click">
+                      <el-button link :icon="MoreFilled" size="small" />
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item :command="{ action: 'rename', id: session.id }">
+                            重命名
+                          </el-dropdown-item>
+                          <el-dropdown-item :command="{ action: 'delete', id: session.id }">
+                            删除
+                          </el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 右侧聊天区域 -->
+          <div class="chat-main">
             <div class="chat-header">
               <h2>{{ currentSession?.title || '新对话' }}</h2>
               <div class="header-actions">
-                <el-button type="primary" @click="saveSession">保存会话</el-button>
+                <el-button v-if="currentSession" type="primary" @click="clearMessages" size="small">
+                  清空对话
+                </el-button>
               </div>
             </div>
             
             <div class="chat-messages" ref="messagesContainer">
+              <div v-if="messages.length === 0 && !currentSession" class="welcome-message">
+                <div class="welcome-content">
+                  <el-icon size="48" color="#409EFF"><ChatDotRound /></el-icon>
+                  <h3>欢迎使用智能心理咨询</h3>
+                  <p>我是您的AI心理咨询助手，有什么可以帮助您的吗？</p>
+                </div>
+              </div>
+              
               <div
                 v-for="message in messages"
                 :key="message.id"
                 :class="['message-item', message.messageType === 0 ? 'user' : 'ai']"
               >
-                <div class="avatar">
-                  <el-avatar v-if="message.messageType === 0" :size="40">
-                    {{ userInfo?.username?.charAt(0) || 'U' }}
-                  </el-avatar>
-                  <el-avatar v-else :size="40" style="background-color: var(--primary-color)">
-                    <el-icon><Robot /></el-icon>
-                  </el-avatar>
+                <!-- 调试信息 -->
+                <!-- {{ JSON.stringify(message) }} -->
+                <div class="message-bubble">
+                  <div class="avatar">
+                    <el-avatar v-if="message.messageType === 0" :size="40">
+                      {{ userInfo?.username?.charAt(0) || 'U' }}
+                    </el-avatar>
+                    <el-avatar v-else :size="40" style="background-color: var(--primary-color)">
+                      AI
+                    </el-avatar>
+                  </div>
+                  <div class="message-content">
+                    <div class="message-text">{{ message.content }}</div>
+                    <div class="message-time">{{ formatTime(message.createdAt) }}</div>
+                  </div>
                 </div>
-                <div class="message-content">{{ message.content }}</div>
               </div>
               
               <div v-if="loading" class="message-item ai">
-                <div class="avatar">
-                  <el-avatar :size="40" style="background-color: var(--primary-color)">
-                    <el-icon><Robot /></el-icon>
-                  </el-avatar>
-                </div>
-                <div class="message-content">
-                  <div class="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                <div class="message-bubble">
+                  <div class="avatar">
+                    <el-avatar :size="40" style="background-color: var(--primary-color)">
+                      AI
+                    </el-avatar>
+                  </div>
+                  <div class="message-content">
+                    <div class="typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
             
             <div class="chat-input">
-              <el-input
+              <chat-input
                 v-model="inputMessage"
-                type="textarea"
-                :rows="3"
-                placeholder="请输入您想说的话..."
-                @keydown.ctrl.enter="sendMessage"
+                :loading="loading"
+                @send="sendMessage"
+                @clear="clearInput"
               />
-              <div class="input-actions">
-                <el-button @click="clearInput">清空</el-button>
-                <el-button type="primary" @click="sendMessage" :disabled="!inputMessage.trim() || loading">
-                  发送 (Ctrl+Enter)
-                </el-button>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 风险评估面板 -->
-          <div v-if="currentRiskAssessment" class="risk-panel">
-            <h3>风险评估</h3>
-            <div :class="['risk-card', currentRiskAssessment.level?.toLowerCase()]">
-              <div class="risk-level">风险等级: {{ getRiskLevelText(currentRiskAssessment.level) }}</div>
-              <div class="risk-score">风险分数: {{ currentRiskAssessment.score?.toFixed(2) }}</div>
-              <div class="risk-description">{{ currentRiskAssessment.description }}</div>
-              <div v-if="currentRiskAssessment.recommendation" class="risk-recommendation">
-                <strong>建议:</strong> {{ currentRiskAssessment.recommendation }}
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </template>
+  </div>
+</template>
+          
   
   <script setup>
-  import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
-  import { useRoute, useRouter } from 'vue-router'
-  import { ElMessage } from 'element-plus'
-  import { useAuthStore } from '@/store/auth'
-  import { sendMessage as sendMessageApi, getMessageHistory, createSession } from '@/api/chat'
-  import { useAuth } from '@/composables/useAuth'
-  import AppHeader from '@/components/common/Header.vue'
-  import AppSidebar from '@/components/common/Sidebar.vue'
-  
-  const route = useRoute()
-  const router = useRouter()
-  const authStore = useAuthStore()
-  const { requireAuth } = useAuth()
-  
-  // 检查认证状态
-  if (!requireAuth()) {
-    // 如果未认证，将会重定向到登录页面
-  }
-  const userInfo = computed(() => authStore.userInfo)
-  const messages = ref([])
-  const inputMessage = ref('')
-  const loading = ref(false)
-  const messagesContainer = ref(null)
-  const currentSession = ref(null)
-  const currentRiskAssessment = ref(null)
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { ChatDotRound, Plus, MoreFilled } from '@element-plus/icons-vue'
+import { useAuthStore } from '@/store/auth'
+import { sendMessage as sendMessageApi, getMessageHistory, createSession, getSessionList } from '@/api/chat'
+import { useAuth } from '@/composables/useAuth'
+import AppHeader from '@/components/common/Header.vue'
+import AppSidebar from '@/components/common/Sidebar.vue'
+import ChatInput from '@/components/chat/ChatInput.vue'
+
+const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
+const { requireAuth } = useAuth()
+
+// 检查认证状态
+if (!requireAuth()) {
+  // 如果未认证，将会重定向到登录页面
+}
+const userInfo = computed(() => authStore.userInfo)
+const messages = ref([])
+const inputMessage = ref('')
+const loading = ref(false)
+const messagesContainer = ref(null)
+const currentSession = ref(null)
+const currentSessionId = ref(null)
+const sessions = ref([])
+const sessionsLoading = ref(false)
+const currentRiskAssessment = ref(null)
   
   // 获取风险等级文本
   const getRiskLevelText = (level) => {
@@ -119,6 +174,208 @@
     return levelMap[level] || '未知'
   }
   
+  // 格式化时间
+  const formatTime = (time) => {
+    if (!time) return ''
+    const date = new Date(time)
+    const now = new Date()
+    
+    // 如果是同一天，只显示时间
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    }
+    
+    // 否则显示日期和时间
+    return date.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  
+  // 格式化日期
+  const formatDate = (time) => {
+    if (!time) return ''
+    const date = new Date(time)
+    const now = new Date()
+    
+    // 如果是今天
+    if (date.toDateString() === now.toDateString()) {
+      return '今天 ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    }
+    
+    // 如果是昨天
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    if (date.toDateString() === yesterday.toDateString()) {
+      return '昨天 ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    }
+    
+    // 否则显示完整日期
+    return date.toLocaleDateString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit'
+    })
+  }
+  
+  // 获取会话列表
+  const fetchSessions = async () => {
+    sessionsLoading.value = true
+    try {
+      const response = await getSessionList({
+        token: authStore.token
+      })
+      
+      if (response && response.sessions) {
+        sessions.value = response.sessions || []
+      } else {
+        ElMessage.error('获取会话列表失败')
+      }
+    } catch (error) {
+      console.error('获取会话列表失败:', error)
+      ElMessage.error('获取会话列表失败')
+    } finally {
+      sessionsLoading.value = false
+    }
+  }
+  
+  // 创建新会话
+  const createNewSession = async () => {
+    try {
+      // 清空当前消息
+      messages.value = []
+      currentSession.value = null
+      currentSessionId.value = null
+      
+      // 创建新会话
+      const response = await createSession({
+        token: authStore.token
+      })
+      
+      if (response && response.id) {
+        // 后端返回的session数据直接在response中
+        const newSession = {
+          id: response.id,
+          title: response.title || `对话-${new Date().toLocaleDateString()}`,
+          createdAt: response.createdAt,
+          updatedAt: response.updatedAt,
+          messageCount: response.messageCount || 0
+        }
+        
+        currentSession.value = newSession
+        currentSessionId.value = newSession.id
+        sessions.value.unshift(newSession)
+        
+        console.log('创建会话成功:', newSession)
+        ElMessage.success('新对话创建成功')
+      } else {
+        console.error('创建会话失败:', response)
+        ElMessage.error('创建新对话失败')
+      }
+    } catch (error) {
+      console.error('创建新对话失败:', error)
+      ElMessage.error('创建新对话失败')
+    }
+  }
+  
+  // 选择会话
+  const selectSession = async (sessionId) => {
+    if (sessionId === currentSessionId.value) return
+    
+    // 更新当前会话
+    const session = sessions.value.find(s => s.id === sessionId)
+    if (session) {
+      currentSession.value = session
+      currentSessionId.value = sessionId
+    }
+    
+    // 获取消息历史
+    await fetchMessageHistory(sessionId)
+  }
+  
+  
+  
+  // 处理会话命令
+  const handleSessionCommand = async (command) => {
+    const { action, id } = command
+    
+    if (action === 'rename') {
+      const session = sessions.value.find(s => s.id === id)
+      if (!session) return
+      
+      try {
+        const { value: newTitle } = await ElMessageBox.prompt(
+          '请输入新的会话名称',
+          '重命名会话',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            inputValue: session.title
+          }
+        )
+        
+        if (newTitle) {
+          session.title = newTitle
+          // 这里应该调用重命名接口，暂时只更新本地
+          ElMessage.success('重命名成功')
+        }
+      } catch {
+        // 用户取消
+      }
+    } else if (action === 'delete') {
+      try {
+        await ElMessageBox.confirm(
+          '确定要删除这个会话吗？删除后无法恢复。',
+          '删除确认',
+          {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        // 从列表中移除
+        const index = sessions.value.findIndex(s => s.id === id)
+        if (index !== -1) {
+          sessions.value.splice(index, 1)
+          
+          // 如果删除的是当前会话，清空消息
+          if (id === currentSessionId.value) {
+            messages.value = []
+            currentSession.value = null
+            currentSessionId.value = null
+          }
+        }
+        
+        // 这里应该调用删除接口，暂时只更新本地
+        ElMessage.success('删除成功')
+      } catch {
+        // 用户取消
+      }
+    }
+  }
+  
+  // 清空消息
+  const clearMessages = async () => {
+    try {
+      await ElMessageBox.confirm(
+        '确定要清空当前对话吗？',
+        '清空确认',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+      
+      messages.value = []
+      ElMessage.success('对话已清空')
+    } catch {
+      // 用户取消
+    }
+  }
+  
   // 滚动到底部
   const scrollToBottom = () => {
     nextTick(() => {
@@ -129,48 +386,78 @@
   }
   
   // 发送消息
-  const sendMessage = async () => {
-    if (!inputMessage.value.trim()) return
+  const sendMessage = async (messageContent) => {
+    if (!messageContent || typeof messageContent !== 'string' || !messageContent.trim()) return
     
+    console.log('准备发送消息:', messageContent)
+    
+    // 如果没有当前会话，先创建一个
+    if (!currentSessionId.value) {
+      console.log('没有当前会话，创建新会话')
+      await createNewSession()
+      // 等待一下确保会话创建完成
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    
+    // 添加用户消息
     const userMessage = {
       id: Date.now().toString(),
-      content: inputMessage.value,
+      content: messageContent,
       messageType: 0, // 0表示用户消息
       createdAt: new Date()
     }
     
+    console.log('添加用户消息:', userMessage)
     messages.value.push(userMessage)
-    const messageContent = inputMessage.value
-    inputMessage.value = ''
+    console.log('当前消息列表:', messages.value)
     scrollToBottom()
     
     loading.value = true
     
     try {
-      const response = await sendMessageApi({
-        sessionId: currentSession.value?.id || '',
+      const requestData = {
+        session_id: currentSessionId.value,
         content: messageContent,
-        messageType: 0,
+        message_type: 0,
         token: authStore.token
-      })
+      }
       
-      if (response.code === 200) {
+      console.log('发送消息参数:', requestData)
+      
+      let response
+      try {
+        response = await sendMessageApi(requestData)
+      } catch (error) {
+        console.error('发送消息请求失败:', error)
+        ElMessage.error('发送消息失败，请稍后重试')
+        return
+      }
+      
+      console.log('发送消息响应:', response)
+      
+      // 检查响应是否有效
+      if (!response) {
+        console.error('响应为空或未定义')
+        ElMessage.error('服务器未响应，请稍后重试')
+        return
+      }
+      
+      // 检查响应结构
+      if (response && response.code === 200 && response.aiReply) {
         // 添加AI回复
         const aiMessage = {
           id: response.aiReply.id,
           content: response.aiReply.content,
           messageType: 1, // 1表示AI消息
-          createdAt: new Date(response.aiReply.createdAt)
+          createdAt: response.aiReply.createdAt || new Date()
         }
         
         messages.value.push(aiMessage)
         
-        // 更新当前会话
-        if (!currentSession.value && response.aiReply.sessionId) {
-          currentSession.value = {
-            id: response.aiReply.sessionId,
-            title: `对话-${new Date().toLocaleDateString()}`
-          }
+        // 更新当前会话的最后消息
+        if (currentSession.value) {
+          currentSession.value.lastMessage = aiMessage.content
+          currentSession.value.updatedAt = new Date()
         }
         
         // 更新风险评估
@@ -180,7 +467,9 @@
         
         scrollToBottom()
       } else {
-        ElMessage.error(response.message || '发送消息失败')
+        console.error('发送消息失败:', response)
+        const errorMsg = response && response.message ? response.message : '发送消息失败'
+        ElMessage.error(errorMsg)
       }
     } catch (error) {
       ElMessage.error(error.message || '发送消息失败')
@@ -194,55 +483,54 @@
     inputMessage.value = ''
   }
   
-  // 保存会话
-  const saveSession = async () => {
-    if (!currentSession.value) {
-      try {
-        const response = await createSession({
-          token: authStore.token
-        })
-        
-        if (response.code === 200) {
-          currentSession.value = response.data
-          ElMessage.success('会话保存成功')
-        } else {
-          ElMessage.error(response.message || '保存会话失败')
-        }
-      } catch (error) {
-        ElMessage.error(error.message || '保存会话失败')
-      }
-    } else {
-      ElMessage.success('会话已保存')
-    }
-  }
-  
   // 获取历史消息
   const fetchMessageHistory = async (sessionId) => {
+    loading.value = true
     try {
-      const response = await getMessageHistory(sessionId, {
-        page: 1,
-        pageSize: 100
+      const response = await getMessageHistory({
+        token: authStore.token,
+        session_id: sessionId
       })
       
-      if (response.code === 200) {
-        messages.value = response.data.list || []
+      if (response && response.messages) {
+        messages.value = response.messages || []
         scrollToBottom()
       }
     } catch (error) {
       ElMessage.error(error.message || '获取历史消息失败')
+    } finally {
+      loading.value = false
     }
   }
   
   // 初始化
   onMounted(async () => {
+    // 检查token状态
+    const tokenFromStorage = localStorage.getItem('vue3project_token')
+    const tokenFromStore = authStore.token
+    console.log('页面加载时token状态:', {
+      localStorage: tokenFromStorage,
+      store: tokenFromStore
+    })
+    
+    if (!tokenFromStorage && !tokenFromStore) {
+      ElMessage.error('未找到登录凭证，请重新登录')
+      router.push('/login')
+      return
+    }
+    
+    // 首先获取会话列表
+    await fetchSessions()
+    
     // 检查是否有会话ID
     const sessionId = route.query.sessionId
     if (sessionId) {
       // 如果有会话ID，获取历史消息
       await fetchMessageHistory(sessionId)
-      currentSession.value = {
-        id: sessionId,
-        title: `对话-${new Date().toLocaleDateString()}`
+      const session = sessions.value.find(s => s.id === sessionId)
+      if (session) {
+        currentSession.value = session
+        currentSessionId.value = sessionId
       }
     }
     
@@ -261,37 +549,134 @@
   </script>
   
   <style scoped lang="scss">
-  .chat-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    overflow: hidden;
-  }
+.page-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-container {
+  display: flex;
+  height: 100%;
+  background-color: var(--background-color);
+}
+
+// 左侧会话列表
+.chat-sidebar {
+  width: 280px;
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
   
-  .chat-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background-color: var(--background-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    margin-bottom: 20px;
-  }
-  
-  .chat-header {
+  .sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-light);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+  }
+  
+  .session-list {
+    flex: 1;
+    overflow-y: auto;
+    
+    .empty-state {
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .session-item {
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      
+      &:hover {
+        background-color: var(--secondary-color);
+      }
+      
+      &.active {
+        background-color: rgba(var(--primary-color), 0.1);
+        border-right: 3px solid var(--primary-color);
+      }
+      
+      .session-info {
+        flex: 1;
+        min-width: 0;
+        
+        .session-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--text-color);
+          margin: 0 0 5px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        
+        .session-preview {
+          font-size: 12px;
+          color: var(--text-secondary);
+          margin: 0 0 5px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        
+        .session-time {
+          font-size: 11px;
+          color: var(--text-placeholder);
+        }
+      }
+      
+      .session-actions {
+        margin-left: 10px;
+      }
+    }
+  }
+}
+
+// 右侧聊天区域
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  
+  .chat-header {
     padding: 16px 20px;
     border-bottom: 1px solid var(--border-light);
     background-color: var(--background-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     
     h2 {
       font-size: 18px;
       font-weight: 500;
       color: var(--text-color);
+      margin: 0;
     }
   }
   
@@ -300,80 +685,95 @@
     padding: 20px;
     overflow-y: auto;
     
-    .message-item {
+    .welcome-message {
       display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      
+      .welcome-content {
+        text-align: center;
+        
+        h3 {
+          margin: 16px 0 8px;
+          color: var(--text-color);
+        }
+        
+        p {
+          margin: 0;
+          color: var(--text-secondary);
+        }
+      }
+    }
+    
+    .message-item {
       margin-bottom: 20px;
       
       &.user {
+        display: flex;
         justify-content: flex-end;
         
-        .message-content {
-          background-color: var(--primary-color);
-          color: white;
-          border-radius: 18px 18px 4px 18px;
-        }
-        
-        .avatar {
-          margin-left: 12px;
-          margin-right: 0;
+        .message-bubble {
+          max-width: 70%;
+          
+          .message-content {
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 18px 18px 4px 18px;
+          }
+          
+          .avatar {
+            margin-left: 12px;
+            margin-right: 0;
+          }
         }
       }
       
       &.ai {
+        display: flex;
         justify-content: flex-start;
         
-        .message-content {
-          background-color: var(--secondary-color);
-          color: var(--text-color);
-          border-radius: 18px 18px 18px 4px;
+        .message-bubble {
+          max-width: 70%;
+          
+          .message-content {
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            border-radius: 18px 18px 18px 4px;
+          }
+          
+          .avatar {
+            margin-right: 12px;
+            margin-left: 0;
+          }
         }
       }
       
-      .avatar {
-        margin-right: 12px;
-        flex-shrink: 0;
+      .message-bubble {
+        display: flex;
+        align-items: flex-start;
+        
+        .avatar {
+          flex-shrink: 0;
+        }
+        
+        .message-content {
+          padding: 12px 16px;
+          line-height: 1.5;
+          word-wrap: break-word;
+          
+          .message-text {
+            margin-bottom: 5px;
+            white-space: pre-wrap;
+          }
+          
+          .message-time {
+            font-size: 12px;
+            text-align: right;
+            opacity: 0.7;
+          }
+        }
       }
-      
-      .message-content {
-        max-width: 70%;
-        padding: 12px 16px;
-        line-height: 1.5;
-        word-wrap: break-word;
-      }
-    }
-  }
-  
-  .typing-indicator {
-    display: flex;
-    align-items: center;
-    
-    span {
-      height: 8px;
-      width: 8px;
-      background-color: #999;
-      border-radius: 50%;
-      display: inline-block;
-      margin: 0 2px;
-      animation: typing 1.4s infinite ease-in-out both;
-      
-      &:nth-child(1) {
-        animation-delay: -0.32s;
-      }
-      
-      &:nth-child(2) {
-        animation-delay: -0.16s;
-      }
-    }
-  }
-  
-  @keyframes typing {
-    0%, 80%, 100% {
-      transform: scale(0);
-      opacity: 0.5;
-    }
-    40% {
-      transform: scale(1);
-      opacity: 1;
     }
   }
   
@@ -388,18 +788,99 @@
       margin-top: 10px;
     }
   }
+}
+
+.typing-indicator {
+  display: flex;
+  align-items: center;
   
-  .risk-panel {
-    width: 300px;
-    background-color: var(--background-color);
-    border-radius: 8px;
-    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-    padding: 20px;
+  span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--text-secondary);
+    margin: 0 2px;
+    animation: typing 1.4s infinite;
     
-    h3 {
-      font-size: 18px;
-      color: var(--text-color);
-      margin-bottom: 15px;
+    &:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    
+    &:nth-child(3) {
+      animation-delay: 0.4s;
     }
   }
-  </style>
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+.risk-panel {
+  width: 300px;
+  background-color: var(--background-color);
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  
+  h3 {
+    font-size: 18px;
+    color: var(--text-color);
+    margin-bottom: 15px;
+  }
+  
+  .risk-card {
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    
+    &.low {
+      background-color: rgba(103, 194, 58, 0.1);
+      border-left: 4px solid #67C23A;
+    }
+    
+    &.medium {
+      background-color: rgba(230, 162, 60, 0.1);
+      border-left: 4px solid #E6A23C;
+    }
+    
+    &.high {
+      background-color: rgba(245, 108, 108, 0.1);
+      border-left: 4px solid #F56C6C;
+    }
+    
+    &.critical {
+      background-color: rgba(220, 53, 69, 0.1);
+      border-left: 4px solid #DC3545;
+    }
+  }
+  
+  .risk-level {
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  
+  .risk-score {
+    margin-bottom: 8px;
+  }
+  
+  .risk-description {
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  
+  .risk-recommendation {
+    padding-top: 12px;
+    border-top: 1px solid var(--border-light);
+    
+    strong {
+      color: var(--primary-color);
+    }
+  }
+}
+</style>

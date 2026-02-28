@@ -194,6 +194,9 @@ const testResult = ref({})
 
 // 获取测评详情
 const fetchTestDetail = async () => {
+  // 重置状态
+  showResult.value = false
+  
   try {
     const response = await getTemplateDetail(testId.value, {
       token: localStorage.getItem('vue3project_token')
@@ -312,15 +315,28 @@ const submitTest = async () => {
         answer = answers.value[question.id]
       }
       
-      // 计算分数（这里简化处理，实际应根据题目选项计算）
+      // 计算分数 - 根据题目数量动态计算每道题的分值
       const options = parseOptions(question.options)
       if (question.type === 1 || question.type === 4) {
-        const selectedOption = options.find(opt => opt.value === answer)
-        score = selectedOption ? selectedOption.score || 0 : 0
+        const selectedOptionIndex = options.findIndex(opt => opt.value === answer)
+        
+        // 计算每道题的分值 = 100分 / 题目总数
+        const questionScore = 100 / questions.value.length
+        
+        // 五个选项的分值按比例分配，使用更精确的方法确保总分是100
+        const scoreMap = [
+          Math.floor(questionScore * 1),      // 第一个选项：100%
+          Math.floor(questionScore * 0.75),   // 第二个选项：75%
+          Math.floor(questionScore * 0.5),    // 第三个选项：50%
+          Math.floor(questionScore * 0.25),   // 第四个选项：25%
+          0                  // 第五个选项：0%
+        ]
+        
+        score = selectedOptionIndex >= 0 && selectedOptionIndex < scoreMap.length ? scoreMap[selectedOptionIndex] : 0
       }
       
       questionAnswers.push({
-        question_id: question.id,
+        question_id: parseInt(question.id),
         answer: answer,
         score: score
       })
@@ -335,10 +351,10 @@ const submitTest = async () => {
     
     if (response.code === 200) {
       testResult.value = {
-        totalScore: response.total_score,
+        totalScore: response.totalScore || response.total_score, // 兼容两种命名方式
         result: response.result,
-        riskLevel: response.risk_level,
-        suggestions: getSuggestions(response.risk_level)
+        riskLevel: response.riskLevel || response.risk_level, // 兼容两种命名方式
+        suggestions: getSuggestions(response.riskLevel || response.risk_level) // 兼容两种命名方式
       }
       showResult.value = true
       ElMessage.success('测评提交成功')
@@ -397,121 +413,127 @@ onMounted(() => {
 .test-detail-page {
   min-height: 100vh;
   background-color: #f5f5f5;
+  padding-top: 105px; /* 为固定导航栏留出空间 */
+  // 确保页面可以滚动，防止内容被截断
+  overflow-x: hidden; 
 }
 
-/* 导航栏样式 */
-.navbar {
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  position: sticky;
+ /* 导航栏样式 */
+ .navbar {
+  position: fixed;
   top: 0;
+  left: 0;
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   z-index: 1000;
+  overflow-x: hidden;
 }
-
-.nav-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.logo {
-  cursor: pointer;
-  
-  h1 {
-    margin: 0;
-    font-size: 24px;
-    color: #333;
-  }
-}
-
-.nav-menu {
-  flex: 1;
-}
-
-.nav-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.nav-bg {
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.nav {
-  max-width: 1200px;
-  margin: 0 auto;
-  
-  ul {
+  .nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
     display: flex;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    
-    li {
-      position: relative;
-      
-      a {
-        display: block;
-        padding: 15px 20px;
-        color: #666;
-        text-decoration: none;
-        font-size: 16px;
-        transition: all 0.3s ease;
-        
-        &:hover {
-          color: #409eff;
-          background-color: #f0f0f0;
-        }
-        
-        &.router-link-active {
-          color: #409eff;
-          background-color: #f0f0f0;
-        }
-      }
-      
-      &.active a {
-        color: #409eff;
-        background-color: #f0f0f0;
-      }
-      
-      &.hover::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 50%;
-        width: 0;
-        height: 2px;
-        background-color: #409eff;
-        transform: translateX(-50%);
-      }
-      
-      &.active::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 50%;
-        width: 100%;
-        height: 2px;
-        background-color: #409eff;
-        transform: translateX(-50%);
-      }
-    }
+    align-items: center;
+    justify-content: space-between;
+    height: 70px;
   }
+  .logo {
+  cursor: pointer;
+}
+ 
+.logo h1 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--primary-color);
+  transition: color 0.3s;
+}
+ 
+.logo:hover h1 {
+  color: var(--primary-color);
+  opacity: 0.8;
+}
+  .nav-menu {
+    display: flex;
+    gap: 30px;
+  }
+  .nav-link {
+  text-decoration: none;
+  color: var(--text-color);
+  font-weight: 500;
+  transition: color 0.3s;
+  cursor: pointer;
+}
+
+.nav-link:hover {
+  color: var(--primary-color);
+}
+  .nav-actions {
+    display: flex;
+    gap: 15px;
+  }
+  /* 新导航栏样式 */
+.nav-bg {
+  font-family: Arial, 'Microsoft Yahei', 'Helvetica Neue', Helvetica, 'Lucida Grande', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', STHeiti, SimSun, sans-serif;
+  font-size: 14px;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: justify;
+  background: #70ba96;
+  height: 50px;
+}
+
+.nav ul {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 45px;
+}
+
+.nav li {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+/* 新导航栏里面的功能样式 */
+.nav-bg a {
+  font-family: Arial, 'Microsoft Yahei', 'Helvetica Neue', Helvetica, 'Lucida Grande', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', STHeiti, SimSun, sans-serif;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  list-style: none;
+  text-align: center;
+  font-size: 17px;
+  line-height: 50px;
+  background-color: transparent;
+  text-decoration: none;
+  color: #fff;
+  display: block;
+  position: relative;
 }
 
 /* 测评内容样式 */
 .test-content {
-  padding: 30px 0;
+  padding: 30px 0 60px 0;
+  min-height: calc(100vh - 105px); /* 确保内容区域至少占满剩余空间 */
+  position: relative; /* 确保定位上下文正确 */
+  overflow: visible; /* 确保内容不被裁剪 */
+  padding-bottom: 100px; /* 为按钮留出足够空间 */
 }
 
 .container {
   max-width: 800px;
   margin: 0 auto;
   padding: 0 20px;
+  position: relative; /* 确保定位上下文正确 */
+  z-index: 1; /* 确保在导航栏下方 */
 }
 
 .test-header {
@@ -553,6 +575,9 @@ onMounted(() => {
   padding: 30px;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+   // 关键：确保内容溢出可见，不要隐藏底部
+   overflow: visible; 
+  position: relative;
 }
 
 .question-item {
@@ -561,9 +586,9 @@ onMounted(() => {
   border-bottom: 1px solid #eee;
   
   &:last-child {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    border-bottom: none;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    
   }
 }
 
@@ -597,7 +622,8 @@ onMounted(() => {
   padding-left: 51px;
   
   .option-item {
-    display: block;
+    display: block; // 改为 block 防止换行问题
+    align-items: center;
     margin-bottom: 15px;
     
     &:last-child {
@@ -606,11 +632,89 @@ onMounted(() => {
   }
 }
 
-.test-actions {
+/* 修复Element Plus单选框和复选框的样式 */
+:deep(.el-radio),
+:deep(.el-checkbox) {
+  margin-right: 10px;
+  margin-bottom: 15px;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+:deep(.el-radio__label),
+:deep(.el-checkbox__label) {
+  font-size: 16px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: normal;
+  padding-left: 8px;
+}
+
+/* 确保单选框和复选框组正确排列 */
+:deep(.el-radio-group),
+:deep(.el-checkbox-group) {
   display: flex;
+  flex-direction: row;
+  flex-direction: column;
+  width: 100%;
+  align-items: flex-start;
+}
+
+:deep(.el-radio),
+:deep(.el-checkbox) {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 20px;
+  margin-bottom: 15px;
+  vertical-align: top;
+}
+
+/* 确保所有选项在同一水平线上 */
+:deep(.el-radio__input),
+:deep(.el-checkbox__input) {
+  vertical-align: top;
+  margin-top: 0;
+}
+
+:deep(.el-radio__label),
+:deep(.el-checkbox__label) {
+  display: inline-block;
+  vertical-align: top;
+  line-height: 1.4;
+}
+.test-actions-wrapper {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px dashed #eee; // 添加虚线分隔，视觉上更明显
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.test-actions {
+  display: flex !important;
   justify-content: center;
   gap: 20px;
   margin-top: 30px;
+  margin-bottom: 50px; /* 增加底部边距确保完全显示 */
+  position: relative;
+  z-index: 10;
+  height: auto !important;
+  min-height: 60px !important;
+  overflow: visible !important;
+}
+
+/* 确保按钮可见 */
+:deep(.el-button) {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative;
+  z-index: 10;
+  height: auto !important;
+  min-height: 40px !important;
+  overflow: visible !important;
+  min-width: 120px;
+  font-size: 16px;
 }
 
 /* 测评结果样式 */
