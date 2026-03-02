@@ -42,3 +42,14 @@ export function getSessionList(params) {
     params
   })
 }
+
+// 删除会话
+export function deleteSession(params) {
+  return request({
+    url: `/api/v1/aichat/session/${params.session_id}`,
+    method: 'delete',
+    params: {
+      token: params.token
+    }
+  })
+}

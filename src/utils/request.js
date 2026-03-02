@@ -74,6 +74,25 @@ service.interceptors.response.use(
       return Promise.reject(new Error(`请求失败，状态码: ${response.status}`))
     }
     
+    // 处理流式响应
+    if (response.data && response.data.output && response.data.output.choices) {
+      // 流式响应，提取完整内容
+      const choice = response.data.output.choices[0]
+      if (choice && choice.message && choice.message.content) {
+        return {
+          code: 200,
+          message: '发送成功',
+          aiReply: {
+            id: Date.now().toString(),
+            userId: 'ai',
+            content: choice.message.content,
+            messageType: 'AI',
+            createdAt: new Date().toISOString()
+          }
+        }
+      }
+    }
+    
     // 返回响应数据
     return response.data
   },

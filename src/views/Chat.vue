@@ -86,14 +86,23 @@
                     <el-avatar v-if="message.messageType === 0" :size="40">
                       {{ userInfo?.username?.charAt(0) || 'U' }}
                     </el-avatar>
-                    <el-avatar v-else :size="40" style="background-color: var(--primary-color)">
+                    <div v-else class="ai-avatar">
                       AI
-                    </el-avatar>
+                    </div>
                   </div>
-                  <div class="message-content">
+                  <div v-if="message.messageType === 0" class="message-content">
                     <div class="message-text">{{ message.content }}</div>
+                    <!-- 用户消息不显示时间 -->
+                  </div>
+                  <div v-else class="message-content">
+                    <div class="message-text">{{ message.content }}</div>
+                    <!-- AI消息时间显示在内容中 -->
                     <div class="message-time">{{ formatTime(message.createdAt) }}</div>
                   </div>
+                </div>
+                <!-- AI消息时间显示在头像下面 -->
+                <div v-if="message.messageType === 1" class="ai-time">
+                  {{ formatTime(message.createdAt) }}
                 </div>
               </div>
               
@@ -137,7 +146,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ChatDotRound, Plus, MoreFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/store/auth'
-import { sendMessage as sendMessageApi, getMessageHistory, createSession, getSessionList } from '@/api/chat'
+import { sendMessage as sendMessageApi, getMessageHistory, createSession, getSessionList, deleteSession } from '@/api/chat'
 import { useAuth } from '@/composables/useAuth'
 import AppHeader from '@/components/common/Header.vue'
 import AppSidebar from '@/components/common/Sidebar.vue'
@@ -335,24 +344,76 @@ const currentRiskAssessment = ref(null)
           }
         )
         
-        // 从列表中移除
-        const index = sessions.value.findIndex(s => s.id === id)
+        // 调用删除API
+        const response = await deleteSession({
+          session_id: id,
+          token: authStore.token
+        })
+        
+        if (response && response.code === 200) {
+          // 从列表中移除
+          const index = sessions.value.findIndex(s => s.id === id)
+          if (index !== -1) {
+            sessions.value.splice(index, 1)
+            
+            // 如果删除的是当前会话，清空消息
+            if (id === currentSessionId.value) {
+              messages.value = []
+              currentSession.value = null
+              currentSessionId.value = null
+            }
+          }
+          
+          ElMessage.success('删除成功')
+        } else {
+          ElMessage.error(response.message || '删除失败')
+        }
+      } catch (error) {
+        // 用户取消或删除失败
+        if (error !== 'cancel') {
+          ElMessage.error('删除失败')
+        }
+      }
+    }
+  }
+  
+  // 删除会话
+  const handleDeleteSession = async (sessionId) => {
+    try {
+      await ElMessageBox.confirm(
+        '确定要删除这个会话吗？',
+        '删除会话',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+      
+      const response = await deleteSession({
+        session_id: sessionId,
+        token: authStore.token
+      })
+      
+      if (response && response.code === 200) {
+        ElMessage.success('删除成功')
+        // 从会话列表中移除
+        const index = sessions.value.findIndex(s => s.id === sessionId)
         if (index !== -1) {
           sessions.value.splice(index, 1)
-          
-          // 如果删除的是当前会话，清空消息
-          if (id === currentSessionId.value) {
-            messages.value = []
-            currentSession.value = null
-            currentSessionId.value = null
-          }
         }
         
-        // 这里应该调用删除接口，暂时只更新本地
-        ElMessage.success('删除成功')
-      } catch {
-        // 用户取消
+        // 如果删除的是当前会话，清空消息
+        if (currentSessionId.value === sessionId) {
+          messages.value = []
+          currentSession.value = null
+          currentSessionId.value = null
+        }
+      } else {
+        ElMessage.error(response.message || '删除失败')
       }
+    } catch (error) {
+      ElMessage.error('删除失败')
     }
   }
   
@@ -493,7 +554,11 @@ const currentRiskAssessment = ref(null)
       })
       
       if (response && response.messages) {
-        messages.value = response.messages || []
+        // 处理历史消息的类型
+        messages.value = response.messages.map(msg => ({
+          ...msg,
+          messageType: msg.messageType === 'AI' ? 1 : 0 // 确保AI消息的messageType为1
+        })) || []
         scrollToBottom()
       }
     } catch (error) {
@@ -715,37 +780,85 @@ const currentRiskAssessment = ref(null)
         
         .message-bubble {
           max-width: 70%;
-          
-          .message-content {
-            background-color: var(--primary-color);
-            color: white;
-            border-radius: 18px 18px 4px 18px;
-          }
+          display: flex;
+          align-items: center;
           
           .avatar {
             margin-left: 12px;
             margin-right: 0;
+            order: 2; // 头像在右边
+          }
+          
+          .message-content {
+            background-color: #70ba96;
+            color: white;
+            border-radius: 8px;
+            padding: 10px 15px;
+            order: 1; // 内容在左边
+            margin-right: 12px;
+            
+            .message-text {
+              margin-bottom: 0; // 去掉时间
+            }
+            
+            .message-time {
+              display: none; // 隐藏时间
+            }
           }
         }
       }
       
       &.ai {
         display: flex;
-        justify-content: flex-start;
+        flex-direction: column;
+        align-items: flex-start;
         
         .message-bubble {
           max-width: 70%;
-          
-          .message-content {
-            background-color: var(--secondary-color);
-            color: var(--text-color);
-            border-radius: 18px 18px 18px 4px;
-          }
+          display: flex;
+          align-items: flex-start;
+          margin-bottom: 5px;
           
           .avatar {
             margin-right: 12px;
             margin-left: 0;
+            flex-shrink: 0;
           }
+          
+          .message-content {
+            background-color: #70ba96;
+            color: white;
+            border-radius: 8px;
+            padding: 10px 15px;
+            flex: 1;
+            
+            .message-text {
+              margin-bottom: 5px;
+            }
+            
+            .message-time {
+              display: none; // 隐藏内容中的时间
+            }
+          }
+        }
+        
+        // AI消息时间显示在头像正下方
+        .ai-time {
+          font-size: 12px;
+          color: black;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+          margin-top: 5px;
+          margin-left: 0; // 与头像左对齐
+          width: 40px; // 头像宽度
+          text-align: center;
+          padding: 0;
+          line-height: 1.2;
+        }
+        
+        // 悬浮时显示时间
+        &:hover .ai-time {
+          opacity: 0.7;
         }
       }
       
@@ -757,6 +870,19 @@ const currentRiskAssessment = ref(null)
           flex-shrink: 0;
         }
         
+        .ai-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background-color: #70ba96;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          font-weight: bold;
+        }
+        
         .message-content {
           padding: 12px 16px;
           line-height: 1.5;
@@ -765,6 +891,8 @@ const currentRiskAssessment = ref(null)
           .message-text {
             margin-bottom: 5px;
             white-space: pre-wrap;
+            word-break: break-word;
+            overflow-wrap: break-word;
           }
           
           .message-time {
