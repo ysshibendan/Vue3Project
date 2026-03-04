@@ -504,12 +504,12 @@
                   <table class="appointment-table-content">
                     <thead>
                       <tr>
-                        <th style="width: 20%; text-align: center;">学生姓名</th>
-                        <th style="width: 20%; text-align: center;">预约日期</th>
-                        <th style="width: 20%; text-align: center;">预约时间</th>
-                        <th style="width: 20%; text-align: center;">创建时间</th>
-                        <th style="width: 15%; text-align: center;">状态</th>
-                        <th style="width: 20%; text-align: center;">操作</th>
+                        <th style="width: 15%; text-align: center;">学生姓名</th>
+                        <th style="width: 15%; text-align: center;">预约日期</th>
+                        <th style="width: 15%; text-align: center;">预约时间</th>
+                        <th style="width: 15%; text-align: center;">创建时间</th>
+                        <th style="width: 10%; text-align: center;">状态</th>
+                        <th style="width: 30%; text-align: center;">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -523,7 +523,7 @@
                             {{ getAppointmentStatusType(appointment.status).text }}
                           </el-tag>
                         </td>
-                        <td>
+                        <td style="text-align: center;">
                           <el-button 
                             v-if="appointment.status === 0" 
                             type="success" 
@@ -532,6 +532,15 @@
                             :loading="updatingStatus === appointment.id"
                           >
                             接受
+                          </el-button>
+                          
+                          <el-button 
+                            v-if="appointment.status === 1" 
+                            type="primary" 
+                            size="small" 
+                            @click="startConsultationDialog(appointment)"
+                          >
+                            前往
                           </el-button>
                           
                           <el-button 
@@ -600,7 +609,150 @@
           </div> -->
             
           </div>
+          
+          <!-- 弹窗式聊天/视频通话容器 -->
+          <el-dialog 
+      v-model="consultationDialog.visible" 
+      :title="consultationDialog.title" 
+      width="1200px" 
+      :before-close="handleCloseConsultationDialog"
+      :close-on-click-modal="false"
+      class="consultation-dialog"
+    >
+      <!-- 切换按钮 -->
+      <div class="consultation-tabs">
+        <el-button 
+          :type="consultationDialog.activeTab === 'chat' ? 'primary' : 'default'"
+          @click="consultationDialog.activeTab = 'chat'"
+          class="tab-button"
+        >
+          文字聊天
+        </el-button>
+        <el-button 
+          :type="consultationDialog.activeTab === 'video' ? 'primary' : 'default'"
+          @click="consultationDialog.activeTab = 'video'"
+          class="tab-button"
+        >
+          视频聊天
+        </el-button>
+      </div>
+      
+      <!-- 文字聊天内容 -->
+      <div v-if="consultationDialog.activeTab === 'chat'" class="chat-content">
+        <!-- 聊天头部 -->
+        <div class="chat-header">
+          <div class="appointment-info" v-if="consultationDialog.appointment">
+            <!-- 使用img标签替代el-avatar，确保图片正确显示 -->
+            <div class="avatar-container">
+              <img 
+                :src="getUserAvatar()" 
+                :alt="consultationDialog.appointment.userName"
+                class="counselor-avatar-img"
+                @error="handleAvatarError"
+                ref="counselorAvatarImg"
+              />
+            </div>
+            <div class="appointment-details">
+              <div class="appointment-name">{{ consultationDialog.appointment.userName }}</div>
+            </div>
+          </div>
         </div>
+        
+        <!-- 聊天消息区域 -->
+        <div class="chat-messages" ref="dialogMessagesContainer">
+          <div
+            v-for="message in consultationDialog.messages"
+            :key="message.id"
+            :class="['message-item', message.sender_id === userInfo?.id ? 'user' : 'student']"
+          >
+            <!-- 学生消息：左边头像，右边消息 -->
+            <div v-if="message.sender_id !== userInfo?.id" class="message-row student-message">
+              <div class="message-avatar">
+                <!-- 使用img标签替代el-avatar，确保图片正确显示 -->
+                <img 
+                  :src="getUserAvatar()" 
+                  :alt="consultationDialog.appointment?.userName || '学生'"
+                  class="message-avatar-img"
+                  @error="handleMessageAvatarError"
+                  ref="messageAvatarImg"
+                />
+              </div>
+              <div class="message-bubble">
+                <div class="message-content">
+                  {{ message.content }}
+                </div>
+                <div class="message-time">
+                  {{ formatTime(message.sent_at) }}
+                </div>
+              </div>
+            </div>
+            
+            <!-- 咨询师消息：右边消息，左边头像 -->
+            <div v-else class="message-row counselor-message">
+              <div class="message-bubble">
+                <div class="message-content">
+                  {{ message.content }}
+                </div>
+                <div class="message-time">
+                  {{ formatTime(message.sent_at) }}
+                </div>
+              </div>
+              <div class="message-avatar">
+                <el-avatar :size="40" :src="userInfo?.avatar">
+                  {{ userInfo?.username?.charAt(0) || 'C' }}
+                </el-avatar>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 聊天输入框 -->
+        <div class="chat-input" v-if="consultationDialog.sessionId">
+          <div class="input-container">
+            <el-input
+              v-model="consultationDialog.inputMessage"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入消息..."
+              @keydown.enter.prevent="sendDialogMessage"
+              resize="none"
+            />
+            <el-button 
+              type="primary" 
+              @click="sendDialogMessage"
+              :disabled="!consultationDialog.inputMessage.trim()"
+              class="send-button"
+            >
+              发送
+            </el-button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 视频聊天内容 -->
+      <div v-if="consultationDialog.activeTab === 'video'" class="video-content">
+        <div class="video-container">
+          <div class="video-local">
+            <video ref="dialogLocalVideo" autoplay muted></video>
+            <div class="video-info">我</div>
+          </div>
+          <div class="video-remote">
+            <video ref="dialogRemoteVideo" autoplay></video>
+            <div class="video-info">对方</div>
+          </div>
+          <div class="video-controls">
+            <el-button 
+              type="primary" 
+              @click="toggleDialogVideoCall"
+              :disabled="consultationDialog.videoCall.active"
+            >
+              {{ consultationDialog.videoCall.active ? '挂断' : '发起视频' }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+      </div>
     </div>
   </template>
   
@@ -615,6 +767,13 @@ import AppHeader from '@/components/common/Header.vue'
 import AppSidebar from '@/components/common/Sidebar.vue'
 import { getCounselorAppointments, getUserAppointments, updateAppointmentStatus, cancelAppointment } from '@/api/appointment'
 import { getUserResults } from '@/api/questionnaire'
+import { 
+  startConsultation as startConsultationApi, 
+  sendMessage as sendConsultationMessage, 
+  getMessageHistory, 
+  endConsultation as endConsultationApi,
+  getActiveConsultation
+} from '@/api/consultation'
   
   const authStore = useAuthStore()
 const { requireAuth } = useAuth()
@@ -632,6 +791,13 @@ if (!requireAuth()) {
   const passwordFormRef = ref()
   const updating = ref(false)
   const updatingPassword = ref(false)
+  
+  // 咨询弹窗相关引用
+  const dialogMessagesContainer = ref(null)
+  const dialogLocalVideo = ref(null)
+  const dialogRemoteVideo = ref(null)
+  const counselorAvatarImg = ref(null)
+  const messageAvatarImg = ref(null)
   
   const profileForm = reactive({
     username: '',
@@ -660,6 +826,25 @@ if (!requireAuth()) {
     avatarBase64: '',
     avatarBytes: null,
     status: 1
+  })
+  
+  // 咨询弹窗数据
+  const consultationDialog = reactive({
+    visible: false,
+    title: '咨询对话',
+    activeTab: 'chat', // 'chat' 或 'video'
+    appointment: null,
+    userInfo: null, // 学生详细信息
+    sessionId: null,
+    messages: [],
+    inputMessage: '',
+    websocket: null,
+    videoCall: {
+      active: false,
+      localStream: null,
+      remoteStream: null,
+      peerConnection: null
+    }
   })
   
   // 确保表单数据正确初始化
@@ -2360,6 +2545,535 @@ const loadQuestionnaireResults = async () => {
       ElMessage.error('获取用户信息失败')
     }
   })
+  
+  // 咨询相关方法
+  
+  // 格式化时间
+  const formatTime = (time) => {
+    if (!time) return ''
+    const date = new Date(time)
+    const now = new Date()
+    
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    } else {
+      return date.toLocaleString('zh-CN', { 
+        month: '2-digit', 
+        day: '2-digit',
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })
+    }
+  }
+  
+  // 获取学生头像
+  const getUserAvatar = () => {
+    if (!consultationDialog.userInfo) {
+      return '/src/assets/images/head.webp'
+    }
+    
+    const avatar = consultationDialog.userInfo.avatar
+    
+    if (!avatar || avatar.trim() === '') {
+      return '/src/assets/images/head.webp'
+    }
+    
+    // 如果是相对路径，则从assets/images获取
+    if (avatar.startsWith('/') || !avatar.startsWith('http')) {
+      const fileName = avatar.replace(/^\//, '')
+      return `/src/assets/images/${fileName}`
+    }
+    
+    return avatar
+  }
+  
+  // 处理头像加载错误
+  const handleAvatarError = (e) => {
+    e.target.src = '/src/assets/images/head.webp'
+  }
+  
+  // 处理消息中头像加载错误
+  const handleMessageAvatarError = (e) => {
+    e.target.src = '/src/assets/images/head.webp'
+  }
+  
+  // 开始咨询弹窗
+  const startConsultationDialog = async (appointment) => {
+    try {
+      const response = await startConsultationApi({
+        token: authStore.token,
+        appointment_id: appointment.id
+      })
+      
+      if (response.code === 200) {
+        // 初始化弹窗数据
+        consultationDialog.appointment = appointment
+        // 使用appointment.id作为sessionId
+        consultationDialog.sessionId = appointment.id
+        consultationDialog.title = `与 ${appointment.userName} 的咨询`
+        consultationDialog.activeTab = 'chat' // 默认显示聊天
+        consultationDialog.messages = []
+        consultationDialog.inputMessage = ''
+        consultationDialog.visible = true
+        
+        // 获取学生信息
+        await fetchUserInfo(appointment.userId)
+        
+        ElMessage.success('咨询已开始')
+        
+        // 获取历史消息
+        await fetchDialogMessageHistory()
+        
+        // 建立WebSocket连接
+        await connectWebSocket()
+      } else {
+        // 尝试获取活跃咨询会话
+        try {
+          const activeResponse = await getActiveConsultation({
+            token: authStore.token,
+            appointment_id: appointment.id
+          })
+          
+          if (activeResponse.code === 200) {
+            // 初始化弹窗数据
+            consultationDialog.appointment = appointment
+            consultationDialog.sessionId = appointment.id
+            consultationDialog.title = `与 ${appointment.userName} 的咨询`
+            consultationDialog.activeTab = 'chat'
+            consultationDialog.messages = []
+            consultationDialog.inputMessage = ''
+            consultationDialog.visible = true
+            
+            // 获取学生信息
+            await fetchUserInfo(appointment.userId)
+            
+            ElMessage.success('已连接到现有咨询会话')
+            
+            // 获取历史消息
+            await fetchDialogMessageHistory()
+            
+            // 建立WebSocket连接
+            await connectWebSocket()
+          } else {
+            ElMessage.error(activeResponse.message || '获取活跃会话失败')
+          }
+        } catch (activeError) {
+          ElMessage.error(response.message || '开始咨询失败')
+        }
+      }
+    } catch (error) {
+      ElMessage.error('开始咨询失败')
+    }
+  }
+  
+  // 获取学生信息
+  const fetchUserInfo = async (userId) => {
+    try {
+      // 这里应该调用获取用户信息的API
+      // 暂时使用模拟数据
+      consultationDialog.userInfo = {
+        id: userId,
+        username: '学生用户',
+        avatar: '1.jpg'
+      }
+    } catch (error) {
+      console.error('获取学生信息失败:', error)
+      // 使用默认信息
+      consultationDialog.userInfo = {
+        id: userId,
+        username: '学生用户',
+        avatar: ''
+      }
+    }
+  }
+  
+  // 获取消息历史
+  const fetchDialogMessageHistory = async () => {
+    try {
+      console.log('获取消息历史，会话ID:', consultationDialog.sessionId)
+      const response = await getMessageHistory(consultationDialog.sessionId, {
+        token: authStore.token,
+        page: 1,
+        page_size: 50
+      })
+      
+      console.log('消息历史响应:', response)
+      
+      if (response.code === 200) {
+        // 处理历史消息，根据senderId判断消息归属
+        const messages = (response.messages || []).map(msg => {
+          console.log('处理历史消息:', msg)
+          console.log('消息发送者ID:', msg.senderId, '当前用户ID:', userInfo.value.id)
+          return {
+            ...msg,
+            sender_id: msg.senderId, // 确保字段名一致
+            message_type: msg.messageType === 'TEXT' ? 0 : 1, // 转换消息类型
+            content: msg.content,
+            sent_at: new Date(msg.sentAt)
+          }
+        })
+        
+        console.log('处理后的咨询师端消息列表:', messages)
+        consultationDialog.messages = messages
+        scrollToDialogBottom()
+      }
+    } catch (error) {
+      console.error('获取消息历史失败:', error)
+      ElMessage.error('获取消息历史失败')
+    }
+  }
+  
+  // 建立WebSocket连接
+  const connectWebSocket = async () => {
+    try {
+      // 获取WebSocket连接参数
+      const response = await fetch('/v1/consultation/ws/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authStore.token}`
+        },
+        body: JSON.stringify({
+          token: authStore.token,
+          appointment_id: consultationDialog.sessionId
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('WebSocket连接失败')
+      }
+      
+      
+      
+      // 建立WebSocket连接
+      // 直接连接到WebSocket端点，使用token和appointment_id作为参数
+      const wsUrl = `ws://localhost:8003/v1/consultation/ws?token=${authStore.token}&appointment_id=${consultationDialog.sessionId}`
+      consultationDialog.websocket = new WebSocket(wsUrl)
+      
+      consultationDialog.websocket.onopen = () => {
+        // WebSocket连接已建立
+      }
+      
+      consultationDialog.websocket.onmessage = (event) => {
+        const message = JSON.parse(event.data)
+        console.log('咨询师端收到WebSocket消息:', message)
+        console.log('当前用户ID:', userInfo.value.id)
+        console.log('消息发送者ID:', message.sender_id)
+        
+          if (message.type === 1) { // WS_MESSAGE
+          console.log('处理消息:', message)
+          console.log('当前用户ID:', userInfo.value.id)
+          console.log('消息发送者ID:', message.sender_id)
+          
+          // 确保sender_id正确设置
+          const senderId = message.sender_id || message.senderId
+          
+          // 检查是否为当前用户发送的消息
+          const isCurrentUser = String(senderId) === String(userInfo.value.id)
+          console.log('是否为当前用户发送的消息:', isCurrentUser)
+          
+          // 只添加对方发送的消息，不添加自己发送的消息
+          // 因为自己发送的消息已经在sendDialogMessage中添加了
+          if (!isCurrentUser) {
+            consultationDialog.messages.push({
+              id: message.id || Date.now(),
+              sender_id: senderId,
+              message_type: 0,
+              content: message.content,
+              sent_at: new Date(message.timestamp)
+            })
+            
+            scrollToDialogBottom()
+          }
+        } else if (message.type === 4) { // WS_VIDEO_OFFER
+          // 处理视频通话请求
+          handleVideoOffer(message)
+        }
+      }
+      
+      consultationDialog.websocket.onclose = () => {
+        // WebSocket连接已关闭
+      }
+      
+      consultationDialog.websocket.onerror = (error) => {
+        // WebSocket错误
+      }
+    } catch (error) {
+      ElMessage.error('WebSocket连接失败')
+    }
+  }
+  
+  // 发送弹窗消息
+  const sendDialogMessage = async () => {
+    if (!consultationDialog.inputMessage.trim() || !consultationDialog.sessionId) return
+    
+    console.log('咨询师发送消息:', consultationDialog.inputMessage)
+    console.log('当前用户ID:', userInfo.value.id)
+    
+    try {
+      const response = await sendConsultationMessage({
+        token: authStore.token,
+        appointment_id: consultationDialog.sessionId,
+        message_type: 0, // 文本消息
+        content: consultationDialog.inputMessage
+      })
+      
+      console.log('发送消息响应:', response)
+      
+      if (response.code === 200) {
+        console.log('消息发送成功')
+        // 添加自己发送的消息到聊天框
+        consultationDialog.messages.push({
+          id: response.messageId || Date.now(),
+          sender_id: userInfo.value.id,
+          message_type: 0,
+          content: consultationDialog.inputMessage,
+          sent_at: new Date()
+        })
+        
+        consultationDialog.inputMessage = ''
+        scrollToDialogBottom()
+      } else {
+        console.error('发送消息失败:', response.message)
+        ElMessage.error(response.message || '发送消息失败')
+      }
+    } catch (error) {
+      console.error('发送消息异常:', error)
+      ElMessage.error('发送消息失败')
+    }
+  }
+  
+  // 滚动到底部
+  const scrollToDialogBottom = () => {
+    nextTick(() => {
+      if (dialogMessagesContainer.value) {
+        dialogMessagesContainer.value.scrollTop = dialogMessagesContainer.value.scrollHeight
+      }
+    })
+  }
+  
+  // 关闭弹窗
+  const handleCloseConsultationDialog = () => {
+    // 关闭WebSocket连接
+    if (consultationDialog.websocket) {
+      consultationDialog.websocket.close()
+      consultationDialog.websocket = null
+    }
+    
+    // 结束视频通话
+    if (consultationDialog.videoCall.active) {
+      stopDialogVideoCall()
+    }
+    
+    // 重置弹窗数据
+    consultationDialog.visible = false
+    consultationDialog.appointment = null
+    consultationDialog.userInfo = null
+    consultationDialog.sessionId = null
+    consultationDialog.messages = []
+    consultationDialog.inputMessage = ''
+  }
+  
+  // 切换弹窗视频通话
+  const toggleDialogVideoCall = async () => {
+    if (consultationDialog.videoCall.active) {
+      // 结束视频通话
+      stopDialogVideoCall()
+    } else {
+      // 开始视频通话
+      await startDialogVideoCall()
+    }
+  }
+  
+  // 开始弹窗视频通话
+  const startDialogVideoCall = async () => {
+    try {
+      // 获取本地媒体流
+      const localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      })
+      
+      // 显示本地视频
+      if (dialogLocalVideo.value) {
+        dialogLocalVideo.value.srcObject = localStream
+      }
+      
+      // 创建WebRTC连接
+      const peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' }
+        ]
+      })
+      
+      // 添加本地流
+      localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream)
+      })
+      
+      // 处理远程流
+      peerConnection.ontrack = (event) => {
+        if (dialogRemoteVideo.value) {
+          dialogRemoteVideo.value.srcObject = event.streams[0]
+        }
+        consultationDialog.videoCall.remoteStream = event.streams[0]
+      }
+      
+      // 处理ICE候选
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate && consultationDialog.websocket) {
+          consultationDialog.websocket.send(JSON.stringify({
+            type: 5, // WS_ICE_CANDIDATE
+            session_id: consultationDialog.sessionId,
+            sender_id: userInfo.value.id,
+            content: JSON.stringify(event.candidate),
+            timestamp: new Date().toISOString()
+          }))
+        }
+      }
+      
+      // 创建offer
+      const offer = await peerConnection.createOffer()
+      await peerConnection.setLocalDescription(offer)
+      
+      // 发送offer
+      if (consultationDialog.websocket) {
+        consultationDialog.websocket.send(JSON.stringify({
+          type: 4, // WS_VIDEO_OFFER
+          session_id: consultationDialog.sessionId,
+          sender_id: userInfo.value.id,
+          content: JSON.stringify(offer),
+          timestamp: new Date().toISOString()
+        }))
+      }
+      
+      // 更新状态
+      consultationDialog.videoCall.active = true
+      consultationDialog.videoCall.localStream = localStream
+      consultationDialog.videoCall.peerConnection = peerConnection
+      
+      ElMessage.success('视频通话已发起')
+    } catch (error) {
+      ElMessage.error('发起视频通话失败')
+    }
+  }
+  
+  // 停止弹窗视频通话
+  const stopDialogVideoCall = () => {
+    if (consultationDialog.videoCall.localStream) {
+      consultationDialog.videoCall.localStream.getTracks().forEach(track => track.stop())
+      consultationDialog.videoCall.localStream = null
+    }
+    
+    if (consultationDialog.videoCall.peerConnection) {
+      consultationDialog.videoCall.peerConnection.close()
+      consultationDialog.videoCall.peerConnection = null
+    }
+    
+    if (dialogLocalVideo.value) {
+      dialogLocalVideo.value.srcObject = null
+    }
+    
+    if (dialogRemoteVideo.value) {
+      dialogRemoteVideo.value.srcObject = null
+    }
+    
+    consultationDialog.videoCall.active = false
+    consultationDialog.videoCall.remoteStream = null
+    
+    // 通知对方结束通话
+    if (consultationDialog.websocket) {
+      consultationDialog.websocket.send(JSON.stringify({
+        type: 6, // WS_LEAVE
+        session_id: consultationDialog.sessionId,
+        sender_id: userInfo.value.id,
+        content: '视频通话已结束',
+        timestamp: new Date().toISOString()
+      }))
+    }
+    
+    ElMessage.info('视频通话已结束')
+  }
+  
+  // 处理视频通话请求
+  const handleVideoOffer = async (message) => {
+    try {
+      // 切换到视频标签
+      consultationDialog.activeTab = 'video'
+      
+      // 获取本地媒体流
+      const localStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      })
+      
+      // 显示本地视频
+      if (dialogLocalVideo.value) {
+        dialogLocalVideo.value.srcObject = localStream
+      }
+      
+      // 创建WebRTC连接
+      const peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' }
+        ]
+      })
+      
+      // 添加本地流
+      localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream)
+      })
+      
+      // 处理远程流
+      peerConnection.ontrack = (event) => {
+        if (dialogRemoteVideo.value) {
+          dialogRemoteVideo.value.srcObject = event.streams[0]
+        }
+        consultationDialog.videoCall.remoteStream = event.streams[0]
+      }
+      
+      // 处理ICE候选
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate && consultationDialog.websocket) {
+          consultationDialog.websocket.send(JSON.stringify({
+            type: 5, // WS_ICE_CANDIDATE
+            session_id: consultationDialog.sessionId,
+            sender_id: userInfo.value.id,
+            content: JSON.stringify(event.candidate),
+            timestamp: new Date().toISOString()
+          }))
+        }
+      }
+      
+      // 设置远程描述
+      const offer = JSON.parse(message.content)
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
+      
+      // 创建answer
+      const answer = await peerConnection.createAnswer()
+      await peerConnection.setLocalDescription(answer)
+      
+      // 发送answer
+      if (consultationDialog.websocket) {
+        consultationDialog.websocket.send(JSON.stringify({
+          type: 5, // WS_VIDEO_ANSWER
+          session_id: consultationDialog.sessionId,
+          sender_id: userInfo.value.id,
+          content: JSON.stringify(answer),
+          timestamp: new Date().toISOString()
+        }))
+      }
+      
+      // 更新状态
+      consultationDialog.videoCall.active = true
+      consultationDialog.videoCall.localStream = localStream
+      consultationDialog.videoCall.peerConnection = peerConnection
+      
+      ElMessage.info('视频通话已接通')
+    } catch (error) {
+      ElMessage.error('接听视频通话失败')
+    }
+  }
   </script>
   
   <style scoped lang="scss">
@@ -2930,6 +3644,223 @@ const loadQuestionnaireResults = async () => {
         
         .stats-grid {
           grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    }
+  }
+  
+  /* 弹窗样式 */
+  .consultation-dialog {
+    .el-dialog__body {
+      padding: 0;
+    }
+    
+    .consultation-tabs {
+      padding: 22.5px 30px 0;
+      border-bottom: 1px solid #eee;
+      
+      .tab-button {
+        margin-right: 15px;
+      }
+    }
+    
+    .chat-content {
+      height: 900px;
+      display: flex;
+      flex-direction: column;
+      
+      .chat-header {
+        padding: 22.5px 30px;
+        border-bottom: 1px solid #eee;
+        background-color: #f8f9fa;
+        
+        .appointment-info {
+          display: flex;
+          align-items: center;
+          
+          .avatar-container {
+            .counselor-avatar-img {
+              width: 50px;
+              height: 50px;
+              border-radius: 50%;
+              object-fit: cover;
+            }
+          }
+          
+          .appointment-details {
+            margin-left: 22.5px;
+            
+            .appointment-name {
+              font-size: 27px;
+              font-weight: 600;
+              color: #333;
+            }
+          }
+        }
+      }
+      
+      .chat-messages {
+        flex: 1;
+        padding: 30px;
+        overflow-y: auto;
+        background-color: #f5f7fa;
+        
+        .message-item {
+          margin-bottom: 30px;
+          
+          .student-message {
+            display: flex;
+            align-items: flex-start;
+            
+            .message-avatar {
+              margin-right: 18px;
+              flex-shrink: 0;
+              
+              .message-avatar-img {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                object-fit: cover;
+              }
+            }
+            
+            .message-bubble {
+              max-width: 70%;
+              
+              .message-content {
+                background-color: white;
+                color: #333;
+                border-radius: 27px 27px 27px 6px;
+                padding: 18px 24px;
+                box-shadow: 0 1.5px 3px rgba(0, 0, 0, 0.1);
+                margin-bottom: 7.5px;
+                word-wrap: break-word;
+                line-height: 1.5;
+                font-size: 18px;
+              }
+              
+              .message-time {
+                font-size: 18px;
+                color: #999;
+                padding-left: 7.5px;
+              }
+            }
+          }
+          
+          .counselor-message {
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-end;
+            
+            .message-bubble {
+              max-width: 70%;
+              order: 1;
+              
+              .message-content {
+                background-color: #70ba96;
+                color: white;
+                border-radius: 27px 27px 6px 27px;
+                padding: 18px 24px;
+                box-shadow: 0 1.5px 3px rgba(0, 0, 0, 0.1);
+                margin-bottom: 7.5px;
+                word-wrap: break-word;
+                line-height: 1.5;
+                font-size: 18px;
+              }
+              
+              .message-time {
+                font-size: 18px;
+                color: #999;
+                text-align: right;
+                padding-right: 7.5px;
+              }
+            }
+            
+            .message-avatar {
+              margin-left: 18px;
+              flex-shrink: 0;
+              order: 2;
+            }
+          }
+        }
+      }
+      
+      .chat-input {
+        padding: 22.5px 30px;
+        border-top: 1px solid #eee;
+        background-color: white;
+        
+        .input-container {
+          display: flex;
+          align-items: flex-end;
+          gap: 15px;
+          
+          .el-textarea {
+            flex: 1;
+            
+            :deep(.el-textarea__inner) {
+              border-radius: 27px;
+              padding: 15px 22.5px;
+              resize: none;
+              font-size: 21px;
+              line-height: 1.5;
+            }
+          }
+          
+          .send-button {
+            height: 60px;
+            border-radius: 30px;
+            padding: 0 30px;
+            font-weight: 500;
+            font-size: 18px;
+          }
+        }
+      }
+    }
+    
+    .video-content {
+      height: 750px;
+      
+      .video-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        
+        .video-local, .video-remote {
+          flex: 1;
+          position: relative;
+          background-color: #000;
+          
+          video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+          
+          .video-info {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 7.5px 15px;
+            border-radius: 6px;
+            font-size: 21px;
+          }
+        }
+        
+        .video-local {
+          height: 300px;
+        }
+        
+        .video-remote {
+          flex: 1;
+          min-height: 300px;
+        }
+        
+        .video-controls {
+          padding: 22.5px;
+          text-align: center;
         }
       }
     }

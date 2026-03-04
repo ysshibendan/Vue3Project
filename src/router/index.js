@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
 
 
 const routes = [
@@ -26,6 +27,11 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/Profile.vue')
+  },
+  {
+    path: '/consultation',
+    name: 'Consultation',
+    component: () => import('@/views/Consultation.vue')
   },
   {
     path: '/usercenter',
@@ -71,6 +77,12 @@ const routes = [
     path: '/test/:id',
     name: 'TestDetail',
     component: () => import('@/views/TestDetail.vue')
+  },
+  {
+    path: '/consultation',
+    name: 'Consultation',
+    component: () => import('@/views/Consultation.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

@@ -44,6 +44,11 @@
                 心理测评
               </router-link>
             </li>
+            <li class="">
+              <router-link to="/consultation" class="first-level">
+                在线咨询
+              </router-link>
+            </li>
           </ul>
         </div>
       </div>
@@ -765,6 +770,16 @@ onUnmounted(() => {
   color: #fff;
   display: block;
   position: relative;
+}
+
+.nav-bg a:hover {
+  color: #f0f0f0;
+  text-decoration: underline;
+}
+
+.nav-bg a.router-link-active {
+  color: #f0f0f0;
+  font-weight: bold;
 }
   /* 主要内容样式 */
 main {

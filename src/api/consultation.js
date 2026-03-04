@@ -36,6 +36,15 @@ export function endConsultation(data) {
   })
 }
 
+// 获取活跃咨询会话
+export function getActiveConsultation(data) {
+  return request({
+    url: '/v1/consultation/active',
+    method: 'post',
+    data
+  })
+}
+
 // 提交咨询反馈
 export function submitFeedback(data) {
   return request({

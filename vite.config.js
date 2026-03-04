@@ -17,6 +17,13 @@ export default defineConfig({
       }
     }
   },
+  // 添加静态资源处理
+  assetsInclude: ['src/assets/images'],
+  server: {
+    fs: {
+      strict: false
+    }
+  },
   server: {
     port: 3000,
     proxy: {
