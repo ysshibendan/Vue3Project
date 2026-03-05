@@ -738,13 +738,12 @@
           </div>
           <div class="video-remote">
             <video ref="dialogRemoteVideo" autoplay></video>
-            <div class="video-info">对方</div>
+            <div class="video-info">{{ consultationDialog.appointment?.studentName || '对方' }}</div>
           </div>
           <div class="video-controls">
             <el-button 
-              type="primary" 
+              :type="consultationDialog.videoCall.active ? 'danger' : 'primary'"
               @click="toggleDialogVideoCall"
-              :disabled="consultationDialog.videoCall.active"
             >
               {{ consultationDialog.videoCall.active ? '挂断' : '发起视频' }}
             </el-button>
@@ -757,9 +756,9 @@
   </template>
   
   <script setup>
-  import { ref, reactive, onMounted, computed } from 'vue'
+  import { ref, reactive, onMounted, computed, h } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useAuth } from '@/composables/useAuth'
 import request from '@/utils/request'
@@ -772,7 +771,8 @@ import {
   sendMessage as sendConsultationMessage, 
   getMessageHistory, 
   endConsultation as endConsultationApi,
-  getActiveConsultation
+  getActiveConsultation,
+  startVideoCall
 } from '@/api/consultation'
   
   const authStore = useAuthStore()
@@ -830,22 +830,24 @@ if (!requireAuth()) {
   
   // 咨询弹窗数据
   const consultationDialog = reactive({
-    visible: false,
-    title: '咨询对话',
-    activeTab: 'chat', // 'chat' 或 'video'
-    appointment: null,
-    userInfo: null, // 学生详细信息
-    sessionId: null,
-    messages: [],
-    inputMessage: '',
-    websocket: null,
-    videoCall: {
-      active: false,
-      localStream: null,
-      remoteStream: null,
-      peerConnection: null
-    }
-  })
+  visible: false,
+  title: '咨询对话',
+  activeTab: 'chat', // 'chat' 或 'video'
+  appointment: null,
+  userInfo: null, // 学生详细信息
+  sessionId: null,
+  messages: [],
+  inputMessage: '',
+  websocket: null,
+  videoCall: {
+    active: false,
+    localStream: null,
+    remoteStream: null,
+    peerConnection: null
+  },
+  // 视频通话通知状态
+  incomingCallNotification: null
+})
   
   // 确保表单数据正确初始化
   onMounted(() => {
@@ -2607,7 +2609,9 @@ const loadQuestionnaireResults = async () => {
       
       if (response.code === 200) {
         // 初始化弹窗数据
+        console.log('原始appointment对象:', appointment);
         consultationDialog.appointment = appointment
+        console.log('设置后的appointment对象:', consultationDialog.appointment);
         // 使用appointment.id作为sessionId
         consultationDialog.sessionId = appointment.id
         consultationDialog.title = `与 ${appointment.userName} 的咨询`
@@ -2617,7 +2621,9 @@ const loadQuestionnaireResults = async () => {
         consultationDialog.visible = true
         
         // 获取学生信息
-        await fetchUserInfo(appointment.userId)
+        console.log('即将调用fetchUserInfo，参数userId:', appointment.userId);
+        await fetchUserInfo(appointment.userId);
+        console.log('fetchUserInfo调用完成，appointment.userId:', consultationDialog.appointment?.userId);
         
         ElMessage.success('咨询已开始')
         
@@ -2625,7 +2631,9 @@ const loadQuestionnaireResults = async () => {
         await fetchDialogMessageHistory()
         
         // 建立WebSocket连接
+        console.log('即将调用connectWebSocket函数');
         await connectWebSocket()
+        console.log('connectWebSocket函数调用完成');
       } else {
         // 尝试获取活跃咨询会话
         try {
@@ -2676,6 +2684,12 @@ const loadQuestionnaireResults = async () => {
         username: '学生用户',
         avatar: '1.jpg'
       }
+      
+      // 确保appointment.userId有正确的值
+      if (consultationDialog.appointment) {
+        consultationDialog.appointment.userId = userId;
+        console.log('更新appointment.userId为:', userId);
+      }
     } catch (error) {
       console.error('获取学生信息失败:', error)
       // 使用默认信息
@@ -2683,6 +2697,12 @@ const loadQuestionnaireResults = async () => {
         id: userId,
         username: '学生用户',
         avatar: ''
+      }
+      
+      // 确保appointment.userId有正确的值
+      if (consultationDialog.appointment) {
+        consultationDialog.appointment.userId = userId;
+        console.log('更新appointment.userId为:', userId);
       }
     }
   }
@@ -2725,36 +2745,67 @@ const loadQuestionnaireResults = async () => {
   
   // 建立WebSocket连接
   const connectWebSocket = async () => {
+    console.log('开始执行connectWebSocket函数');
     try {
-      // 获取WebSocket连接参数
-      const response = await fetch('/v1/consultation/ws/connect', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authStore.token}`
-        },
-        body: JSON.stringify({
-          token: authStore.token,
-          appointment_id: consultationDialog.sessionId
-        })
+      // 如果已有连接且连接状态为OPEN，直接返回
+    if (consultationDialog.websocket && consultationDialog.websocket.readyState === WebSocket.OPEN) {
+      console.log('WebSocket已连接，无需重新连接')
+      return
+    }
+    
+    // 获取WebSocket连接参数
+    const response = await fetch('/v1/consultation/ws/connect', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({
+        token: authStore.token,
+        appointment_id: consultationDialog.sessionId
       })
-      
-      if (!response.ok) {
-        throw new Error('WebSocket连接失败')
-      }
+    })
+    
+    if (!response.ok) {
+      throw new Error('WebSocket连接失败')
+    }
       
       
       
       // 建立WebSocket连接
       // 直接连接到WebSocket端点，使用token和appointment_id作为参数
-      const wsUrl = `ws://localhost:8003/v1/consultation/ws?token=${authStore.token}&appointment_id=${consultationDialog.sessionId}`
+      // 如果是咨询师且预约中有学生ID，使用学生ID连接WebSocket
+      console.log('咨询师角色:', userInfo.value.role);
+      console.log('预约信息:', consultationDialog.appointment);
+      console.log('预约中的学生ID:', consultationDialog.appointment?.userId);
+      console.log('当前用户ID:', userInfo.value.id);
+      
+      const userIdForWs = userInfo.value.id
+      
+      console.log('计算出的WebSocket用户ID:', userIdForWs);
+      console.log('userIdForWs类型:', typeof userIdForWs);
+      console.log('userIdForWs是否等于userInfo.value.id:', userIdForWs === userInfo.value.id);
+      // 构建WebSocket URL，包含user_id参数（如果需要）
+      // 构建WebSocket URL
+      let wsUrl = `ws://localhost:8003/v1/consultation/ws?token=${authStore.token}&appointment_id=${consultationDialog.sessionId}`
+      
+      // 建立WebSocket连接
       consultationDialog.websocket = new WebSocket(wsUrl)
       
-      consultationDialog.websocket.onopen = () => {
-        // WebSocket连接已建立
-      }
+      // 等待连接建立
+      await new Promise((resolve, reject) => {
+        consultationDialog.websocket.onopen = () => {
+          console.log('WebSocket连接已建立')
+          resolve()
+        }
+        
+        consultationDialog.websocket.onerror = (error) => {
+          console.error('WebSocket连接错误:', error)
+          reject(error)
+        }
+      })
       
-      consultationDialog.websocket.onmessage = (event) => {
+      consultationDialog.websocket.onmessage = async (event) => {
         const message = JSON.parse(event.data)
         console.log('咨询师端收到WebSocket消息:', message)
         console.log('当前用户ID:', userInfo.value.id)
@@ -2780,14 +2831,36 @@ const loadQuestionnaireResults = async () => {
               sender_id: senderId,
               message_type: 0,
               content: message.content,
-              sent_at: new Date(message.timestamp)
+              sent_at: message.timestamp ? new Date(message.timestamp.seconds * 1000 + message.timestamp.nanos / 1000000) : new Date()
             })
             
             scrollToDialogBottom()
           }
         } else if (message.type === 4) { // WS_VIDEO_OFFER
           // 处理视频通话请求
+          console.log('咨询师端收到视频通话请求:', message)
           handleVideoOffer(message)
+        } else if (message.type === 5) { // WS_VIDEO_ANSWER 或 WS_ICE_CANDIDATE
+          // 检查是否为视频answer或ice-candidate
+          if (consultationDialog.videoCall.peerConnection) {
+            try {
+              const data = JSON.parse(message.content)
+              
+              // 判断是answer还是ice-candidate
+              if (data.type === 'answer') {
+                // 处理视频answer
+                console.log('咨询师端收到answer:', data)
+                await consultationDialog.videoCall.peerConnection.setRemoteDescription(new RTCSessionDescription(data))
+                console.log('已设置远程描述(answer)')
+              } else if (data.candidate) {
+                // 处理ICE候选
+                await consultationDialog.videoCall.peerConnection.addIceCandidate(new RTCIceCandidate(data))
+                console.log('已添加ICE候选')
+              }
+            } catch (error) {
+              console.error('处理视频消息失败:', error)
+            }
+          }
         }
       }
       
@@ -2825,7 +2898,7 @@ const loadQuestionnaireResults = async () => {
         // 添加自己发送的消息到聊天框
         consultationDialog.messages.push({
           id: response.messageId || Date.now(),
-          sender_id: userInfo.value.id,
+          sender_id: Number(userInfo.value.id),
           message_type: 0,
           content: consultationDialog.inputMessage,
           sent_at: new Date()
@@ -2878,7 +2951,7 @@ const loadQuestionnaireResults = async () => {
   const toggleDialogVideoCall = async () => {
     if (consultationDialog.videoCall.active) {
       // 结束视频通话
-      stopDialogVideoCall()
+      await stopDialogVideoCall()
     } else {
       // 开始视频通话
       await startDialogVideoCall()
@@ -2886,13 +2959,128 @@ const loadQuestionnaireResults = async () => {
   }
   
   // 开始弹窗视频通话
-  const startDialogVideoCall = async () => {
-    try {
-      // 获取本地媒体流
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+        const startDialogVideoCall = async () => {
+          try {
+             // 检查WebSocket连接状态
+    if (!consultationDialog.websocket || consultationDialog.websocket.readyState !== WebSocket.OPEN) {
+      console.log('WebSocket未连接，正在重新连接...')
+      await connectWebSocket()
+      
+      // 等待连接建立
+      await new Promise((resolve) => {
+        const checkConnection = () => {
+          if (consultationDialog.websocket && consultationDialog.websocket.readyState === WebSocket.OPEN) {
+            resolve()
+          } else {
+            setTimeout(checkConnection, 100)
+          }
+        }
+        checkConnection()
       })
+    }
+    
+    // 先调用后端API发起视频通话请求
+    const response = await startVideoCall({
+      token: authStore.token,
+      appointment_id: consultationDialog.sessionId,
+      user_id: Number(userInfo.value.id)
+    })
+            
+            if (response.code !== 200) {
+              ElMessage.error(response.message || '发起视频通话请求失败')
+              return
+            }
+            
+            // 获取本地媒体流
+            let localStream;
+            
+            // 在Profile.vue中，当前用户一定是咨询师，始终使用真实摄像头
+            // 不再依赖userInfo.value.role判断，直接使用真实摄像头
+            try {
+              console.log('咨询师端正在获取真实摄像头...')
+              localStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+              })
+              console.log('咨询师端成功获取真实摄像头')
+              ElMessage.success('咨询师端已获取真实摄像头')
+            } catch (mediaError) {
+              console.error('咨询师端获取媒体流失败:', mediaError)
+              ElMessage.error('咨询师端无法访问摄像头或麦克风: ' + mediaError.message)
+              
+              // 如果获取真实摄像头失败，尝试使用模拟视频流作为备选方案
+              try {
+                console.log('咨询师端尝试使用模拟视频流作为备选方案...')
+                
+                // 创建模拟视频流
+                const canvas = document.createElement('canvas')
+                canvas.width = 640
+                canvas.height = 480
+                const ctx = canvas.getContext('2d')
+                
+                // 绘制测试视频帧
+                const drawFrame = () => {
+                  // 清除画布
+                  ctx.fillStyle = '#1a1a2e'
+                  ctx.fillRect(0, 0, canvas.width, canvas.height)
+                  
+                  // 绘制时间戳
+                  ctx.fillStyle = '#ffffff'
+                  ctx.font = '20px Arial'
+                  ctx.textAlign = 'left'
+                  ctx.fillText(new Date().toLocaleTimeString(), 10, 30)
+                  
+                  // 绘制咨询师标识
+                  ctx.fillStyle = '#4CAF50'
+                  ctx.font = '30px Arial'
+                  ctx.textAlign = 'center'
+                  ctx.fillText('咨询师端模拟视频', canvas.width / 2, canvas.height / 2 - 20)
+                  
+                  // 绘制状态
+                  ctx.fillStyle = '#FFC107'
+                  ctx.font = '24px Arial'
+                  ctx.fillText('(摄像头不可用，使用备选方案)', canvas.width / 2, canvas.height / 2 + 20)
+                  
+                  // 绘制边框
+                  ctx.strokeStyle = '#4CAF50'
+                  ctx.lineWidth = 3
+                  ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10)
+                }
+                
+                // 初始绘制
+                drawFrame()
+                
+                // 获取模拟视频流
+                localStream = canvas.captureStream(30) // 30 FPS
+                
+                // 添加音频轨道（静音）
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+                const dest = audioContext.createMediaStreamDestination()
+                
+                // 创建静音音频轨道
+                const silentBuffer = audioContext.createBuffer(1, audioContext.sampleRate, audioContext.sampleRate)
+                const source = audioContext.createBufferSource()
+                source.buffer = silentBuffer
+                source.loop = true
+                source.connect(dest)
+                source.start(0)
+                
+                const audioTrack = dest.stream.getAudioTracks()[0]
+                localStream.addTrack(audioTrack)
+                
+                // 持续更新视频帧
+                const frameInterval = setInterval(drawFrame, 1000 / 30)
+                
+                // 保存interval ID以便清理
+                localStream._frameInterval = frameInterval
+                
+                ElMessage.warning('咨询师端摄像头不可用，已切换到模拟视频流')
+              } catch (simError) {
+                console.error('创建模拟视频流失败:', simError)
+                ElMessage.error('咨询师端无法创建模拟视频流，视频通话失败')
+                return
+              }
+            }
       
       // 显示本地视频
       if (dialogLocalVideo.value) {
@@ -2921,14 +3109,30 @@ const loadQuestionnaireResults = async () => {
       
       // 处理ICE候选
       peerConnection.onicecandidate = (event) => {
-        if (event.candidate && consultationDialog.websocket) {
-          consultationDialog.websocket.send(JSON.stringify({
-            type: 5, // WS_ICE_CANDIDATE
-            session_id: consultationDialog.sessionId,
-            sender_id: userInfo.value.id,
-            content: JSON.stringify(event.candidate),
-            timestamp: new Date().toISOString()
-          }))
+        // 使用最新的WebSocket引用
+        const currentWebSocket = consultationDialog.websocket
+        const urlParams = new URLSearchParams(currentWebSocket.url.split('?')[1]);
+        const appointmentId = urlParams.get('appointment_id');
+        const userId = urlParams.get('user_id') || userInfo.value.id;
+        if (event.candidate && currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+          try {
+            currentWebSocket.send(JSON.stringify({
+              type: 5, // WS_ICE_CANDIDATE
+              // 使用当前连接的session_id，而不是重新构建
+              
+              session_id: `ws_${appointmentId}_${userInfo.value.id}`,
+        sender_id: Number(userInfo.value.id),
+        content: JSON.stringify(event.candidate),
+              timestamp: {
+                seconds: Math.floor(Date.now() / 1000),
+                nanos: (Date.now() % 1000) * 1000000
+              }
+            }))
+          } catch (error) {
+            console.error('发送ICE候选失败:', error)
+          }
+        } else if (event.candidate) {
+          console.warn('WebSocket未连接，无法发送ICE候选')
         }
       }
       
@@ -2937,14 +3141,31 @@ const loadQuestionnaireResults = async () => {
       await peerConnection.setLocalDescription(offer)
       
       // 发送offer
-      if (consultationDialog.websocket) {
-        consultationDialog.websocket.send(JSON.stringify({
-          type: 4, // WS_VIDEO_OFFER
-          session_id: consultationDialog.sessionId,
-          sender_id: userInfo.value.id,
-          content: JSON.stringify(offer),
-          timestamp: new Date().toISOString()
-        }))
+      // 使用最新的WebSocket引用
+      const currentWebSocket = consultationDialog.websocket
+      const wsUrlParams = new URLSearchParams(currentWebSocket.url.split('?')[1]);
+      const wsAppointmentId = wsUrlParams.get('appointment_id');
+      const wsUserId = wsUrlParams.get('user_id') || userInfo.value.id;
+      if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+        try {
+          currentWebSocket.send(JSON.stringify({
+            type: 4, // WS_VIDEO_OFFER
+            session_id: `ws_${wsAppointmentId}_${wsUserId}`,
+            sender_id: Number(userInfo.value.id),
+            content: JSON.stringify(offer),
+            timestamp: {
+          seconds: Math.floor(Date.now() / 1000),
+          nanos: (Date.now() % 1000) * 1000000
+        }
+          }))
+          console.log('视频通话请求已发送')
+        } catch (error) {
+          console.error('发送视频offer失败:', error)
+          ElMessage.error('发送视频通话请求失败')
+        }
+      } else {
+        console.error('WebSocket未连接，无法发送视频通话请求')
+        ElMessage.error('网络连接异常，无法发起视频通话')
       }
       
       // 更新状态
@@ -2959,17 +3180,52 @@ const loadQuestionnaireResults = async () => {
   }
   
   // 停止弹窗视频通话
-  const stopDialogVideoCall = () => {
+  const stopDialogVideoCall = async () => {
+    try {
+      // 调用后端API结束视频通话
+      await endVideoCall({
+        token: authStore.token,
+        appointment_id: consultationDialog.sessionId,
+        user_id: Number(userInfo.value.id)
+      })
+    } catch (error) {
+      console.error('结束视频通话API调用失败:', error)
+    }
+    
+    // 停止所有媒体轨道
     if (consultationDialog.videoCall.localStream) {
-      consultationDialog.videoCall.localStream.getTracks().forEach(track => track.stop())
+      // 清理模拟视频流的定时器
+      if (consultationDialog.videoCall.localStream._frameInterval) {
+        clearInterval(consultationDialog.videoCall.localStream._frameInterval)
+      }
+      
+      consultationDialog.videoCall.localStream.getTracks().forEach(track => {
+        track.stop();
+        track.enabled = false;
+      })
       consultationDialog.videoCall.localStream = null
     }
     
+    if (consultationDialog.videoCall.remoteStream) {
+      // 清理模拟视频流的定时器
+      if (consultationDialog.videoCall.remoteStream._frameInterval) {
+        clearInterval(consultationDialog.videoCall.remoteStream._frameInterval)
+      }
+      
+      consultationDialog.videoCall.remoteStream.getTracks().forEach(track => {
+        track.stop();
+        track.enabled = false;
+      })
+      consultationDialog.videoCall.remoteStream = null
+    }
+    
+    // 关闭WebRTC连接
     if (consultationDialog.videoCall.peerConnection) {
       consultationDialog.videoCall.peerConnection.close()
       consultationDialog.videoCall.peerConnection = null
     }
     
+    // 清除视频元素
     if (dialogLocalVideo.value) {
       dialogLocalVideo.value.srcObject = null
     }
@@ -2978,17 +3234,20 @@ const loadQuestionnaireResults = async () => {
       dialogRemoteVideo.value.srcObject = null
     }
     
+    // 重置状态
     consultationDialog.videoCall.active = false
-    consultationDialog.videoCall.remoteStream = null
     
     // 通知对方结束通话
     if (consultationDialog.websocket) {
       consultationDialog.websocket.send(JSON.stringify({
         type: 6, // WS_LEAVE
-        session_id: consultationDialog.sessionId,
+        session_id: `ws_${consultationDialog.sessionId}_${userInfo.value.id}`,
         sender_id: userInfo.value.id,
         content: '视频通话已结束',
-        timestamp: new Date().toISOString()
+        timestamp: {
+          seconds: Math.floor(Date.now() / 1000),
+          nanos: (Date.now() % 1000) * 1000000
+        }
       }))
     }
     
@@ -2998,80 +3257,287 @@ const loadQuestionnaireResults = async () => {
   // 处理视频通话请求
   const handleVideoOffer = async (message) => {
     try {
-      // 切换到视频标签
-      consultationDialog.activeTab = 'video'
+      // 检查是否已经有视频通话通知
+      if (consultationDialog.incomingCallNotification) {
+        console.log('已有视频通话通知，忽略新的通知')
+        return
+      }
       
-      // 获取本地媒体流
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+      // 显示视频通话通知
+      consultationDialog.incomingCallNotification = ElNotification({
+        title: '视频通话邀请',
+       
+        type: 'info',
+        duration: 0, // 不自动关闭
+        showClose: true,
+        customClass: 'video-call-notification',
+        dangerouslyUseHTMLString: true,
+        message: h('div', {
+          style: 'display: flex; align-items: center; justify-content: space-between;'
+        }, [
+          h('span', '对方发起了视频通话请求，是否接听？'),
+          h('div', {
+            style: 'margin-top: 10px;'
+          }, [
+            h('el-button', {
+              type: 'primary',
+              size: 'small',
+              onClick: async () => {
+                // 关闭通知
+                if (consultationDialog.incomingCallNotification) {
+                  consultationDialog.incomingCallNotification.close()
+                  consultationDialog.incomingCallNotification = null
+                }
+                
+                // 切换到视频标签
+                consultationDialog.activeTab = 'video'
+                
+                // 获取本地媒体流 - 咨询师端优先使用真实摄像头
+              let localStream;
+              try {
+                console.log('咨询师端正在获取真实摄像头...')
+                localStream = await navigator.mediaDevices.getUserMedia({
+                  video: true,
+                  audio: true
+                })
+                console.log('咨询师端成功获取真实摄像头')
+                ElMessage.success('咨询师端已获取真实摄像头')
+              } catch (mediaError) {
+                console.error('咨询师端获取媒体流失败:', mediaError)
+                ElMessage.error('咨询师端无法访问摄像头或麦克风: ' + mediaError.message)
+                
+                // 如果获取真实摄像头失败，尝试使用模拟视频流作为备选方案
+                try {
+                  console.log('咨询师端尝试使用模拟视频流作为备选方案...')
+                  
+                  // 创建模拟视频流
+                  const canvas = document.createElement('canvas')
+                  canvas.width = 640
+                  canvas.height = 480
+                  const ctx = canvas.getContext('2d')
+                  
+                  // 绘制测试视频帧
+                  const drawFrame = () => {
+                    // 清除画布
+                    ctx.fillStyle = '#1a1a2e'
+                    ctx.fillRect(0, 0, canvas.width, canvas.height)
+                    
+                    // 绘制时间戳
+                    ctx.fillStyle = '#ffffff'
+                    ctx.font = '20px Arial'
+                    ctx.textAlign = 'left'
+                    ctx.fillText(new Date().toLocaleTimeString(), 10, 30)
+                    
+                    // 绘制咨询师标识
+                    ctx.fillStyle = '#4CAF50'
+                    ctx.font = '30px Arial'
+                    ctx.textAlign = 'center'
+                    ctx.fillText('咨询师端模拟视频', canvas.width / 2, canvas.height / 2 - 20)
+                    
+                    // 绘制状态
+                    ctx.fillStyle = '#FFC107'
+                    ctx.font = '24px Arial'
+                    ctx.fillText('(摄像头不可用，使用备选方案)', canvas.width / 2, canvas.height / 2 + 20)
+                    
+                    // 绘制边框
+                    ctx.strokeStyle = '#4CAF50'
+                    ctx.lineWidth = 3
+                    ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10)
+                  }
+                  
+                  // 初始绘制
+                  drawFrame()
+                  
+                  // 获取模拟视频流
+                  localStream = canvas.captureStream(30) // 30 FPS
+                  
+                  // 添加音频轨道（静音）
+                  const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+                  const dest = audioContext.createMediaStreamDestination()
+                  
+                  // 创建静音音频轨道
+                  const silentBuffer = audioContext.createBuffer(1, audioContext.sampleRate, audioContext.sampleRate)
+                  const source = audioContext.createBufferSource()
+                  source.buffer = silentBuffer
+                  source.loop = true
+                  source.connect(dest)
+                  source.start(0)
+                  
+                  const audioTrack = dest.stream.getAudioTracks()[0]
+                  localStream.addTrack(audioTrack)
+                  
+                  // 持续更新视频帧
+                  const frameInterval = setInterval(drawFrame, 1000 / 30)
+                  
+                  // 保存interval ID以便清理
+                  localStream._frameInterval = frameInterval
+                  
+                  ElMessage.warning('咨询师端摄像头不可用，已切换到模拟视频流')
+                } catch (simError) {
+                  console.error('创建模拟视频流失败:', simError)
+                  ElMessage.error('咨询师端无法创建模拟视频流，视频通话失败')
+                  return
+                }
+              }
+                
+                // 显示本地视频
+                if (dialogLocalVideo.value) {
+                  dialogLocalVideo.value.srcObject = localStream
+                }
+                
+                // 创建WebRTC连接
+                const peerConnection = new RTCPeerConnection({
+                  iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                  ]
+                })
+                
+                // 添加本地流
+                localStream.getTracks().forEach(track => {
+                  peerConnection.addTrack(track, localStream)
+                })
+                
+                // 处理远程流
+                peerConnection.ontrack = (event) => {
+                  if (dialogRemoteVideo.value) {
+                    dialogRemoteVideo.value.srcObject = event.streams[0]
+                  }
+                  consultationDialog.videoCall.remoteStream = event.streams[0]
+                }
+                
+                // 处理ICE候选
+                peerConnection.onicecandidate = (event) => {
+                  if (event.candidate && consultationDialog.websocket && consultationDialog.websocket.readyState === WebSocket.OPEN) {
+                    try {
+                      consultationDialog.websocket.send(JSON.stringify({
+                      type: 5, // WS_ICE_CANDIDATE
+                      session_id: `ws_${consultationDialog.sessionId}_${userInfo.value.id}`,
+                      sender_id: userInfo.value.id,
+                      content: JSON.stringify(event.candidate),
+                      timestamp: {
+              seconds: Math.floor(Date.now() / 1000),
+              nanos: (Date.now() % 1000) * 1000000
+            }
+                    }))
+                    } catch (error) {
+                      console.error('发送ICE候选失败:', error)
+                    }
+                  } else if (event.candidate) {
+                    console.warn('WebSocket未连接，无法发送ICE候选')
+                  }
+                }
+                
+                // 设置远程描述
+                let offer;
+                try {
+                  offer = JSON.parse(message.content)
+                  
+                  // 检查是否是占位符offer
+                  if (offer.from === 'video_call_invitation' && offer.sdp === 'placeholder') {
+                    console.log('收到视频通话邀请占位符，等待真实offer')
+                    // 不设置远程描述，等待真实的offer
+                    // 创建并发送answer，表示已接听
+                    const answer = await peerConnection.createAnswer()
+                    await peerConnection.setLocalDescription(answer)
+                    
+                    // 发送answer
+                    if (consultationDialog.websocket) {
+                      consultationDialog.websocket.send(JSON.stringify({
+                        type: 5, // WS_VIDEO_ANSWER
+                        session_id: `ws_${consultationDialog.sessionId}_${userInfo.value.id}`,
+                        sender_id: userInfo.value.id,
+                        content: JSON.stringify(answer),
+                        timestamp: {
+                          seconds: Math.floor(Date.now() / 1000),
+                          nanos: (Date.now() % 1000) * 1000000
+                        }
+                      }))
+                    }
+                  } else {
+                    // 真实的offer，设置远程描述
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
+                    
+                    // 创建answer
+                    const answer = await peerConnection.createAnswer()
+                    await peerConnection.setLocalDescription(answer)
+                    
+                    // 发送answer
+                    if (consultationDialog.websocket) {
+                      consultationDialog.websocket.send(JSON.stringify({
+                        type: 5, // WS_VIDEO_ANSWER
+                        session_id: consultationDialog.sessionId,
+                        sender_id: userInfo.value.id,
+                        content: JSON.stringify(answer),
+                        timestamp: {
+                        seconds: Math.floor(Date.now() / 1000),
+                        nanos: (Date.now() % 1000) * 1000000
+                      }
+                      }))
+                    }
+                  }
+                } catch (parseError) {
+                  console.error('解析offer失败:', parseError)
+                  // 如果解析失败，可能是简单的文本通知
+                  console.log('收到简单的视频通话邀请文本，创建并发送answer')
+                  
+                  // 创建answer
+                  const answer = await peerConnection.createAnswer()
+                  await peerConnection.setLocalDescription(answer)
+                  
+                  // 发送answer
+                  if (consultationDialog.websocket) {
+                    consultationDialog.websocket.send(JSON.stringify({
+                      type: 5, // WS_VIDEO_ANSWER
+                      session_id: consultationDialog.sessionId,
+                      sender_id: userInfo.value.id,
+                      content: JSON.stringify(answer),
+                      timestamp: new Date().toISOString()
+                    }))
+                  }
+                }
+                
+                // 创建answer
+                const answer = await peerConnection.createAnswer()
+                await peerConnection.setLocalDescription(answer)
+                
+                // 发送answer
+                if (consultationDialog.websocket) {
+                  consultationDialog.websocket.send(JSON.stringify({
+                    type: 5, // WS_VIDEO_ANSWER
+                    session_id: consultationDialog.sessionId,
+                    sender_id: userInfo.value.id,
+                    content: JSON.stringify(answer),
+                    timestamp: new Date().toISOString()
+                  }))
+                }
+                
+                // 更新状态
+                consultationDialog.videoCall.active = true
+                consultationDialog.videoCall.localStream = localStream
+                consultationDialog.videoCall.peerConnection = peerConnection
+                
+                ElMessage.info('视频通话已接通')
+              }
+            }, '接听'),
+            h('el-button', {
+              type: 'danger',
+              size: 'small',
+              style: 'margin-left: 10px;',
+              onClick: () => {
+                // 关闭通知
+                if (consultationDialog.incomingCallNotification) {
+                  consultationDialog.incomingCallNotification.close()
+                  consultationDialog.incomingCallNotification = null
+                }
+                ElMessage.info('已拒绝视频通话')
+              }
+            }, '拒绝')
+          ])
+        ])
       })
-      
-      // 显示本地视频
-      if (dialogLocalVideo.value) {
-        dialogLocalVideo.value.srcObject = localStream
-      }
-      
-      // 创建WebRTC连接
-      const peerConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' }
-        ]
-      })
-      
-      // 添加本地流
-      localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream)
-      })
-      
-      // 处理远程流
-      peerConnection.ontrack = (event) => {
-        if (dialogRemoteVideo.value) {
-          dialogRemoteVideo.value.srcObject = event.streams[0]
-        }
-        consultationDialog.videoCall.remoteStream = event.streams[0]
-      }
-      
-      // 处理ICE候选
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate && consultationDialog.websocket) {
-          consultationDialog.websocket.send(JSON.stringify({
-            type: 5, // WS_ICE_CANDIDATE
-            session_id: consultationDialog.sessionId,
-            sender_id: userInfo.value.id,
-            content: JSON.stringify(event.candidate),
-            timestamp: new Date().toISOString()
-          }))
-        }
-      }
-      
-      // 设置远程描述
-      const offer = JSON.parse(message.content)
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
-      
-      // 创建answer
-      const answer = await peerConnection.createAnswer()
-      await peerConnection.setLocalDescription(answer)
-      
-      // 发送answer
-      if (consultationDialog.websocket) {
-        consultationDialog.websocket.send(JSON.stringify({
-          type: 5, // WS_VIDEO_ANSWER
-          session_id: consultationDialog.sessionId,
-          sender_id: userInfo.value.id,
-          content: JSON.stringify(answer),
-          timestamp: new Date().toISOString()
-        }))
-      }
-      
-      // 更新状态
-      consultationDialog.videoCall.active = true
-      consultationDialog.videoCall.localStream = localStream
-      consultationDialog.videoCall.peerConnection = peerConnection
-      
-      ElMessage.info('视频通话已接通')
     } catch (error) {
-      ElMessage.error('接听视频通话失败')
+      console.error('处理视频通话请求失败:', error)
+      ElMessage.error('处理视频通话请求失败')
     }
   }
   </script>
@@ -3839,13 +4305,13 @@ const loadQuestionnaireResults = async () => {
           
           .video-info {
             position: absolute;
-            bottom: 15px;
-            left: 15px;
+            bottom: 10px;
+            left: 10px;
             background-color: rgba(0, 0, 0, 0.5);
             color: white;
-            padding: 7.5px 15px;
-            border-radius: 6px;
-            font-size: 21px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
           }
         }
         
