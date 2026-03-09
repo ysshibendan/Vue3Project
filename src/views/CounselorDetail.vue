@@ -29,11 +29,7 @@
                 心理咨询
               </router-link>
             </li>
-            <li class="">
-              <router-link to="/counselors" class="first-level">
-                心理咨询师
-              </router-link>
-            </li>
+
             <li class="">
               <router-link to="/chat" class="first-level">
                 智能聊天
@@ -42,6 +38,11 @@
             <li class="">
               <router-link to="/test" class="first-level">
                 心理测评
+              </router-link>
+            </li>
+            <li class="">
+              <router-link to="/consultation" class="first-level">
+                在线咨询
               </router-link>
             </li>
           </ul>
@@ -465,7 +466,7 @@ onMounted(() => {
   padding: 0;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: 45px;
+  gap: 50px;
 }
 
 .nav li {
@@ -482,7 +483,7 @@ onMounted(() => {
   -webkit-tap-highlight-color: rgba(0,0,0,0);
   list-style: none;
   text-align: center;
-  font-size: 17px;
+  font-size: 20px;
   line-height: 50px;
   background-color: transparent;
   text-decoration: none;

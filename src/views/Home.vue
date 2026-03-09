@@ -29,11 +29,7 @@
                 心理咨询
               </router-link>
             </li>
-            <li class="">
-              <router-link to="/counselors" class="first-level">
-                心理咨询师
-              </router-link>
-            </li>
+
             <li class="">
               <router-link to="/chat" class="first-level">
                 智能聊天
@@ -73,7 +69,7 @@
               <div v-if="index === 1" class="image-overlay">
                 <div class="overlay-title">心 理 A I</div>
                 <div class="overlay-desc">沉浸式心理咨询/AI心理疏导/AI辅助治疗</div>
-                <div class="overlay-button">
+                <div class="overlay-button" @click="goToChat">
                   <span>去聊聊 ></span>
                 </div>
               </div>
@@ -81,7 +77,7 @@
               <div v-if="index === 2" class="image-overlay">
                 <div class="overlay-title">心理咨询预约</div>
                 <div class="overlay-desc">24小时心理咨询预约/免费咨询师推荐</div>
-                <div class="overlay-button">
+                <div class="overlay-button" @click="goToCounselors">
                   <span>立即预约 ></span>
                 </div>
               </div>
@@ -220,41 +216,61 @@
             <p>平台严选师资，客服点对点沟通、一对一推荐</p>
           </div>
           
-          <!-- 咨询师列表 -->
-          <div class="counselor-list">
-            <div 
-            v-for="(counselor, index) in counselorList" 
-              :key="index" 
-              class="counselor-card"
-               @click="goToCounselorDetail(counselor.userInfo.id)"
-              @mouseenter="handleCardHover(index, true)"
-              @mouseleave="handleCardHover(index, false)"
-            >
-              <!-- 咨询师头像 -->
-              <div class="counselor-avatar">
-                <img 
-                  :src="getCounselorAvatar(counselor.userInfo.avatar)" 
-                  :alt="counselor.userInfo.realName"
-                />
-              </div>
-              
-              <!-- 咨询师信息 -->
-              <div class="counselor-info" :class="{ 'hovered': counselor.hovered }">
-                <!-- 基本信息行 -->
-                <div class="counselor-basic">
-                  <span>{{ counselor.userInfo.realName || '' }}老师</span>
-                  <span class="divider" v-if="counselor.userInfo.realName && counselor.counselorInfo.workExperience">|</span>
-                  <span>{{ counselor.counselorInfo.workExperience ? counselor.counselorInfo.workExperience + '年经验老师' : '' }}</span>
+          <!-- 咨询师列表容器 -->
+          <div class="counselor-carousel-container">
+            <div class="counselor-track" :style="{ transform: `translateX(-${counselorPageIndex * 100}%)` }">
+              <!-- 循环两次以实现无缝滚动 -->
+              <div 
+                v-for="(counselor, index) in [...allCounselors, ...allCounselors]" 
+                :key="`${index}-${counselor.userInfo.id}`" 
+                class="counselor-card"
+                @click="goToCounselorDetail(counselor.userInfo.id)"
+                @mouseenter="handleCardHover(index % allCounselors.length, true)"
+                @mouseleave="handleCardHover(index % allCounselors.length, false)"
+              >
+                <!-- 咨询师头像 -->
+                <div class="counselor-avatar">
+                  <img 
+                    :src="getCounselorAvatar(counselor.userInfo.avatar)" 
+                    :alt="counselor.userInfo.realName"
+                  />
                 </div>
                 
-                <!-- 咨询师详细信息 -->
-                <div class="counselor-detail">
-                  <p class="specialty-title">擅长领域：</p>
-                  <p class="specialty">{{ counselor.counselorInfo.specialty || '' }}</p>
-                  <p class="introduction">{{ counselor.counselorInfo.introduction || '' }}</p>
+                <!-- 咨询师信息 -->
+                <div class="counselor-info" :class="{ 'hovered': counselor.hovered }">
+                  <!-- 基本信息行 -->
+                  <div class="counselor-basic">
+                    <span>{{ counselor.userInfo.realName || '' }}老师</span>
+                    <span class="divider" v-if="counselor.userInfo.realName && counselor.counselorInfo.workExperience">|</span>
+                    <span>{{ counselor.counselorInfo.workExperience ? counselor.counselorInfo.workExperience + '年经验老师' : '' }}</span>
+                  </div>
+                  
+                  <!-- 咨询师详细信息 -->
+                  <div class="counselor-detail">
+                    <p class="specialty-title">擅长领域：</p>
+                    <p class="specialty">{{ counselor.counselorInfo.specialty || '' }}</p>
+                    <p class="introduction">{{ counselor.counselorInfo.introduction || '' }}</p>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+          
+          <!-- 咨询师翻页控制 -->
+          <div class="counselor-carousel-controls" v-if="totalCounselorPages > 1">
+            <el-button 
+              @click="prevCounselor"
+              circle
+              icon="ArrowLeft"
+              class="control-btn"
+            />
+            <span class="page-info">{{ counselorPageIndex + 1 }} / {{ totalCounselorPages }}</span>
+            <el-button 
+              @click="nextCounselor"
+              circle
+              icon="ArrowRight"
+              class="control-btn"
+            />
           </div>
         </div>
       </section>
@@ -325,15 +341,15 @@
           <div class="contact-info">
             <div class="contact-item">
               <el-icon size="24"><Message /></el-icon>
-              <span>邮箱：support@mentalhealth.com</span>
+              <span>邮箱：xxxxxxxxx@xx.com</span>
             </div>
             <div class="contact-item">
               <el-icon size="24"><Phone /></el-icon>
-              <span>电话：400-123-4567</span>
+              <span>电话：xxx-xxx-xxxx</span>
             </div>
             <div class="contact-item">
               <el-icon size="24"><Location /></el-icon>
-              <span>地址：北京市朝阳区心理健康中心</span>
+              <span>地址：xx省xx市心理健康中心</span>
             </div>
         </div>
       </div>
@@ -392,7 +408,12 @@ const isAuthenticated = computed(() => authStore.isAuthenticated)
 const currentIndex = ref(0) // 当前起始索引 (0-7)
 const itemsToShow = 7 // 每次显示7个项目
 const totalPages = 8 // 总页数
-const counselorList = ref([]) // 咨询师列表数据
+
+// 咨询师展示轮播功能
+const counselorPageIndex = ref(0) // 当前咨询师页索引
+const counselorsPerPage = 3 // 每页显示的咨询师数量
+const allCounselors = ref([]) // 所有咨询师数据
+const totalCounselorPages = ref(1) // 咨询师总页数
 // 轮播图数据
 const carouselImages = [carousel1, carousel2, carousel3]
 const currentImageIndex = ref(0)
@@ -490,6 +511,9 @@ const goToProfile = () => {
 const goToChat = () => {
   router.push('/chat')
 }
+const goToCounselors = () => {
+  router.push('/counselors')
+}
 const goToHome = () => {
   // 强制重新加载页面，回到顶部
   window.location.href = '/'
@@ -549,13 +573,19 @@ const fetchCounselorList = async () => {
     const data = await response.json()
     
     if (data.code === 200 && data.data) {
-      // 获取前三个咨询师，如果不足三个则用空数据填充
-      const counselors = data.data.slice(0, 3)
-      const counselorCount = counselors.length
+      // 保存所有咨询师数据
+      allCounselors.value = data.data.map(counselor => ({
+        ...counselor,
+        hovered: false
+      }))
       
-      // 如果不足三个，用空数据填充
-      for (let i = counselorCount; i < 3; i++) {
-        counselors.push({
+      // 计算咨询师总数和页数
+      const counselorCount = allCounselors.value.length
+      totalCounselorPages.value = Math.ceil(counselorCount / counselorsPerPage)
+      
+      // 如果没有咨询师，创建空数据
+      if (allCounselors.value.length === 0) {
+        allCounselors.value = Array(3).fill(null).map(() => ({
           userInfo: {
             id: '',
             username: '',
@@ -581,13 +611,12 @@ const fetchCounselorList = async () => {
             updatedAt: ''
           },
           hovered: false
-        })
+        }))
+        totalCounselorPages.value = 1
       }
-      
-      counselorList.value = counselors
     } else {
       // 如果请求失败，创建三个空数据
-      counselorList.value = Array(3).fill(null).map(() => ({
+      allCounselors.value = Array(3).fill(null).map(() => ({
         userInfo: {
           id: '',
           username: '',
@@ -614,10 +643,53 @@ const fetchCounselorList = async () => {
         },
         hovered: false
       }))
+      totalCounselorPages.value = 1
     }
   } catch (error) {
     console.error('获取咨询师列表失败:', error)
+    // 如果请求出错，创建三个空数据
+    allCounselors.value = Array(3).fill(null).map(() => ({
+      userInfo: {
+        id: '',
+        username: '',
+        email: '',
+        phone: '',
+        role: 1,
+        realName: '',
+        gender: '',
+        age: 0,
+        avatar: '',
+        status: 0,
+        lastLoginAt: '',
+        createdAt: '',
+        updatedAt: ''
+      },
+      counselorInfo: {
+        id: '',
+        userId: '',
+        specialty: '',
+        introduction: '',
+        workExperience: 0,
+        createdAt: '',
+        updatedAt: ''
+      },
+      hovered: false
+    }))
+    totalCounselors.value = 3
   }
+}
+
+// 咨询师翻页方法
+const prevCounselor = () => {
+  if (totalCounselorPages.value <= 1) return
+  
+  counselorPageIndex.value = counselorPageIndex.value === 0 ? totalCounselorPages.value - 1 : counselorPageIndex.value - 1
+}
+
+const nextCounselor = () => {
+  if (totalCounselorPages.value <= 1) return
+  
+  counselorPageIndex.value = (counselorPageIndex.value + 1) % totalCounselorPages.value
 }
 
 // 处理卡片悬浮事件
@@ -746,7 +818,7 @@ onUnmounted(() => {
   padding: 0;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: 45px;
+  gap: 50px;
 }
 
 .nav li {
@@ -763,7 +835,7 @@ onUnmounted(() => {
   -webkit-tap-highlight-color: rgba(0,0,0,0);
   list-style: none;
   text-align: center;
-  font-size: 17px;
+  font-size: 20px;
   line-height: 50px;
   background-color: transparent;
   text-decoration: none;
@@ -923,7 +995,7 @@ main {
 /* 轮播图翻页控制样式 */
 .hero .carousel-controls {
   position: absolute;
-  bottom: 20px;
+  bottom: -5px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -959,7 +1031,7 @@ main {
   /* 功能介绍样式 */
   .features {
     padding: 80px 0;
-    background-color: #f9f9f9;
+    background-color: #d4edd4;
   }
   .container {
   max-width: 1200px;
@@ -1042,7 +1114,7 @@ main {
   /* 联系方式样式 */
   .contact {
     padding: 80px 0;
-    background-color: #f9f9f9;
+    background-color: #d4edd4;
   }
   .contact h2 {
     text-align: center;
@@ -1192,12 +1264,25 @@ main {
   background-color: white;
 }
 
-/* 咨询师列表样式 */
-.counselor-list {
+/* 咨询师轮播容器样式 */
+.counselor-carousel-container {
+  overflow: hidden;
+  width: 1200px; /* 增大容器宽度，确保三个咨询师完全显示 */
+  margin: 40px auto 0; /* 居中显示 */
+  position: relative;
+}
+
+.counselor-track {
   display: flex;
-  justify-content: center;
-  gap: 30px;
-  margin-top: 40px;
+  transition: transform 0.5s ease;
+  width: calc(100% * 2); /* 循环两次数据，宽度翻倍 */
+}
+
+/* 每页咨询师容器 */
+.counselor-page {
+  display: flex;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 /* 咨询师卡片样式 */
@@ -1205,6 +1290,7 @@ main {
   position: relative;
   width: 370px;
   height: 370px;
+  min-width: 370px;
   border-radius: 10px;
   border: 10px solid white;
   overflow: hidden;
@@ -1212,6 +1298,9 @@ main {
   transition: all 0.3s ease;
   cursor: pointer;
   pointer-events: auto;
+  margin-right: 30px;
+  flex-shrink: 0;
+  box-sizing: border-box; /* 确保边框包含在宽度内 */
 }
 
 .counselor-card:hover {
@@ -1494,6 +1583,20 @@ main {
  
   padding: 8px 15px;
   border-radius: 20px;
+}
+
+/* 咨询师翻页控制样式 */
+.counselor-carousel-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px auto 0;
+  gap: 10px;
+  width: 120px;
+  padding: 5px 10px;
+  border-radius: 15px;
+  background-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .control-btn {

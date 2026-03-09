@@ -1,8 +1,57 @@
 <template>
-  <div class="page-container">
-    <app-header />
+  <div class="chat-page">
+    <!-- 导航栏 -->
+    <header class="navbar">
+      <div class="nav-container">
+        <div class="logo" @click="goToHome">
+          <h1>心理健康咨询平台</h1>
+        </div>
+        <nav class="nav-menu">
+        </nav>
+        <div class="nav-actions">
+          <template v-if="isAuthenticated">
+            <el-button @click="goToProfile">个人中心</el-button>
+            <el-button type="primary" @click="goToChat">开始咨询</el-button>
+          </template>
+          <template v-else>
+            <el-button @click="goToLogin">登录</el-button>
+            <el-button type="primary" @click="goToLogin">注册</el-button>
+          </template>
+        </div>
+      </div>
+      <!-- 新导航栏 -->
+      <div class="nav-bg" id="navbr">
+        <div class="nav">
+          <ul>
+            <li class="hover"><router-link to="/" class="first-level" title="网站首页">网站首页</router-link></li>
+            <li class="">
+              <router-link to="/counselors" class="first-level">
+                心理咨询
+              </router-link>
+            </li>
+
+            <li class="active">
+              <router-link to="/chat" class="first-level">
+                智能聊天
+              </router-link>
+            </li>
+            <li class="">
+              <router-link to="/test" class="first-level">
+                心理测评
+              </router-link>
+            </li>
+            <li class="">
+              <router-link to="/consultation" class="first-level">
+                在线咨询
+              </router-link>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </header>
     
-    <div class="main-content">
+    <div class="chat-content">
+      <div class="main-content">
       <app-sidebar />
       
       <div class="chat-area">
@@ -137,6 +186,7 @@
       </div>
     </div>
   </div>
+</div>
 </template>
           
   
@@ -160,6 +210,24 @@ const { requireAuth } = useAuth()
 // 检查认证状态
 if (!requireAuth()) {
   // 如果未认证，将会重定向到登录页面
+}
+
+// 导航函数
+const goToLogin = () => {
+  router.push('/login')
+}
+const goToProfile = () => {
+  router.push('/profile')
+}
+const goToChat = () => {
+  // 已经在聊天页面，不需要跳转
+}
+const goToCounselors = () => {
+  router.push('/counselors')
+}
+const goToHome = () => {
+  // 强制重新加载页面，回到顶部
+  window.location.href = '/'
 }
 const userInfo = computed(() => authStore.userInfo)
 const messages = ref([])
@@ -614,10 +682,139 @@ const currentRiskAssessment = ref(null)
   </script>
   
   <style scoped lang="scss">
-.page-container {
+.chat-page {
   height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* 导航栏样式 */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  overflow-x: hidden;
+}
+
+.nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+}
+
+.logo {
+  cursor: pointer;
+}
+
+.logo h1 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--primary-color);
+  transition: color 0.3s;
+}
+
+.logo:hover h1 {
+  color: var(--primary-color);
+  opacity: 0.8;
+}
+
+.nav-menu {
+  display: flex;
+  gap: 30px;
+}
+
+.nav-link {
+  text-decoration: none;
+  color: var(--text-color);
+  font-weight: 500;
+  transition: color 0.3s;
+  cursor: pointer;
+}
+
+.nav-link:hover {
+  color: var(--primary-color);
+}
+
+.nav-actions {
+  display: flex;
+  gap: 15px;
+}
+
+/* 新导航栏样式 */
+.nav-bg {
+  font-family: Arial, 'Microsoft Yahei', 'Helvetica Neue', Helvetica, 'Lucida Grande', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', STHeiti, SimSun, sans-serif;
+  font-size: 14px;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: justify;
+  background: #70ba96;
+  height: 50px;
+}
+
+.nav ul {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 50px;
+}
+
+.nav li {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+/* 新导航栏里面的功能样式 */
+.nav-bg a {
+  font-family: Arial, 'Microsoft Yahei', 'Helvetica Neue', Helvetica, 'Lucida Grande', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', STHeiti, SimSun, sans-serif;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  list-style: none;
+  text-align: center;
+  font-size: 20px;
+  line-height: 50px;
+  background-color: transparent;
+  text-decoration: none;
+  color: #fff;
+  display: block;
+}
+
+.nav-bg a:hover {
+  color: #fff;
+  background-color: #5daa9a;
+}
+
+.nav-bg a.router-link-active {
+  color: #fff;
+  background-color: #4a8e7d;
+}
+
+/* 当前页面高亮 */
+.nav li.active a {
+  color: #fff;
+  background-color: #4a8e7d;
+}
+
+.chat-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  margin-top: 120px; /* 为导航栏留出空间 */
 }
 
 .main-content {

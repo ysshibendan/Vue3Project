@@ -20,8 +20,8 @@
           </template>
         </div>
       </div>
-      <!-- 新导航栏 -->
-      <div class="nav-bg" id="navbr">
+     <!-- 新导航栏 -->
+     <div class="nav-bg" id="navbr">
         <div class="nav">
           <ul>
             <li class="hover"><router-link to="/" class="first-level" title="网站首页">网站首页</router-link></li>
@@ -30,19 +30,20 @@
                 心理咨询
               </router-link>
             </li>
-            <li class="">
-              <router-link to="/counselors" class="first-level">
-                心理咨询师
-              </router-link>
-            </li>
+
             <li class="">
               <router-link to="/chat" class="first-level">
                 智能聊天
               </router-link>
             </li>
-            <li class="active">
+            <li class="">
               <router-link to="/test" class="first-level">
                 心理测评
+              </router-link>
+            </li>
+            <li class="">
+              <router-link to="/consultation" class="first-level">
+                在线咨询
               </router-link>
             </li>
           </ul>
@@ -271,7 +272,7 @@ onMounted(() => {
   padding: 0;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: 45px;
+  gap: 50px;
   /* 防止在小屏幕上换行导致高度变化影响计算 */
   flex-wrap: nowrap; 
 }
@@ -290,7 +291,7 @@ onMounted(() => {
   -webkit-tap-highlight-color: rgba(0,0,0,0);
   list-style: none;
   text-align: center;
-  font-size: 17px;
+  font-size: 20px;
   line-height: 50px;
   background-color: transparent;
   text-decoration: none;

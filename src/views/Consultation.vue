@@ -19,8 +19,8 @@
           </template>
         </div>
       </div>
-      <!-- 新导航栏 -->
-      <div class="nav-bg" id="navbr">
+       <!-- 新导航栏 -->
+       <div class="nav-bg" id="navbr">
         <div class="nav">
           <ul>
             <li class="hover"><router-link to="/" class="first-level" title="网站首页">网站首页</router-link></li>
@@ -29,11 +29,7 @@
                 心理咨询
               </router-link>
             </li>
-            <li class="">
-              <router-link to="/counselors" class="first-level">
-                心理咨询师
-              </router-link>
-            </li>
+
             <li class="">
               <router-link to="/chat" class="first-level">
                 智能聊天
@@ -139,11 +135,11 @@
         <div
           v-for="message in messages"
           :key="message.id"
-          :class="['message-item', message.sender_id === userInfo?.id ? 'user' : 'counselor']"
+          :class="['message-item', message.senderId === userInfo?.id ? 'user' : 'counselor']"
         >
           <div class="message-bubble">
             <div class="avatar">
-              <el-avatar v-if="message.sender_id === userInfo?.id" :size="40">
+              <el-avatar v-if="message.senderId === userInfo?.id" :size="40">
                 {{ userInfo?.username?.charAt(0) || 'U' }}
               </el-avatar>
               <el-avatar v-else :size="40">
@@ -249,10 +245,10 @@
           <div
             v-for="message in consultationDialog.messages"
             :key="message.id"
-            :class="['message-item', message.sender_id === userInfo?.id ? 'user' : 'counselor']"
+            :class="['message-item', message.senderId === userInfo?.id ? 'user' : 'counselor']"
           >
             <!-- 咨询师消息：左边头像，右边消息 -->
-            <div v-if="message.sender_id !== userInfo?.id" class="message-row counselor-message">
+            <div v-if="message.senderId !== userInfo?.id" class="message-row counselor-message">
               <div class="message-avatar">
                 <!-- 使用img标签替代el-avatar，确保图片正确显示 -->
                 <img 
@@ -1130,7 +1126,7 @@ const connectWebSocket = async () => {
                   console.log('从token解析的用户ID:', currentUserId)
                   
                   // 添加消息
-                  const senderId = message.sender_id || message.senderId
+                  const senderId = message.senderId
                   const msgSenderId = String(senderId)
                   
                   consultationDialog.messages.push({
@@ -1153,7 +1149,7 @@ const connectWebSocket = async () => {
           // 添加所有接收到的消息，包括自己发送的消息
           // 这样可以确保消息只显示一次
           // 确保sender_id正确设置
-          const senderId = message.sender_id || message.senderId
+          const senderId = message.senderId
           console.log('当前userInfo对象:', userInfo.value)
           console.log('当前用户ID:', userInfo.value?.id)
           console.log('当前用户ID类型:', typeof userInfo.value?.id)
@@ -1170,7 +1166,7 @@ const connectWebSocket = async () => {
         // 添加所有接收到的消息，包括自己发送的消息
           // 这样可以确保消息只显示一次
           // 确保sender_id正确设置
-          const msgSenderId = message.sender_id || message.senderId
+          const msgSenderId = message.senderId
           console.log('当前userInfo对象:', userInfo.value)
           console.log('当前用户ID:', userInfo.value?.id)
           console.log('当前用户ID类型:', typeof userInfo.value?.id)
@@ -1198,7 +1194,7 @@ const connectWebSocket = async () => {
         // 处理视频通话请求
         console.log('学生端收到视频通话请求:', message)
         console.log('当前会话ID:', consultationDialog.sessionId)
-        console.log('消息发送者ID:', message.sender_id)
+        console.log('消息发送者ID:', message.senderId)
         console.log('当前用户ID:', userInfo.value.id)
         handleVideoOffer(message)
       }
@@ -1253,7 +1249,7 @@ const toggleDialogVideoCall = async () => {
                 if (message.type === 1) { // WS_MESSAGE
                   consultationDialog.messages.push({
                     id: message.id || Date.now(),
-                    sender_id: Number(message.sender_id), // 确保转换为数字
+                    sender_id: Number(message.senderId), // 确保转换为数字
                     message_type: 0,
                     content: message.content,
                     sent_at: message.timestamp ? new Date(message.timestamp.seconds * 1000 + message.timestamp.nanos / 1000000) : new Date()
@@ -1742,7 +1738,7 @@ const handleVideoOffer = async (message) => {
                       }
                     };
                     console.log('发送answer消息:', message);
-                    console.log('sender_id类型:', typeof message.sender_id);
+                    console.log('sender_id类型:', typeof message.senderId);
                     consultationDialog.websocket.send(JSON.stringify(message))
                   }
                   return
@@ -1929,7 +1925,7 @@ onMounted(async () => {
   padding: 0;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: 45px;
+  gap: 50px;
 }
 
 .nav li {
@@ -1946,7 +1942,7 @@ onMounted(async () => {
   -webkit-tap-highlight-color: rgba(0,0,0,0);
   list-style: none;
   text-align: center;
-  font-size: 17px;
+  font-size: 20px;
   line-height: 50px;
   background-color: transparent;
   text-decoration: none;
@@ -2337,8 +2333,8 @@ main {
           .message-bubble {
             max-width: 60%; /* 减少宽度，减少右边空白 */
             display: flex;
-            align-items: center;
-            justify-content: center; /* 文字居中 */
+            flex-direction: column;
+            align-items: flex-end;
             
             .message-content {
                 background-color: #70ba96;
@@ -2353,10 +2349,12 @@ main {
             }
             
             .message-time {
-              font-size: 18px;
+              font-size: 12px;
               color: #999;
               text-align: right;
-              padding-right: 7.5px;
+              align-self: flex-end;
+              width: 100%;
+              margin-top: 7.5px;
             }
           }
           
